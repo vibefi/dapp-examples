@@ -11,6 +11,8 @@ type TokenBalancesCardProps = {
   customTrackedTokens: Address[];
   tokenBalanceError: string | null;
   detectedTokenBalances: DetectedTokenBalance[];
+  isCheckingTokenBalances: boolean;
+  checkedTokenCount: number;
 };
 
 export function TokenBalancesCard({
@@ -21,6 +23,8 @@ export function TokenBalancesCard({
   customTrackedTokens,
   tokenBalanceError,
   detectedTokenBalances,
+  isCheckingTokenBalances,
+  checkedTokenCount,
 }: TokenBalancesCardProps) {
   function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -31,8 +35,13 @@ export function TokenBalancesCard({
     <section className="card">
       <h2>Token Balances</h2>
       <p className="muted">
-        Polling {trackedTokenCount} top ERC20 contracts for balances. 
+        Polling {trackedTokenCount} top ERC20 contracts for balances.
       </p>
+      {isCheckingTokenBalances ? (
+        <p className="muted" role="status" aria-live="polite">
+          Checking token balances: {checkedTokenCount}/{trackedTokenCount}
+        </p>
+      ) : null}
 
       <form onSubmit={onSubmit} className="form tokenAddForm">
         <label htmlFor="customTokenAddress">Add custom token contract</label>

@@ -39,6 +39,8 @@ export default function App() {
     trackedTokenAddresses,
     detectedTokenBalances,
     tokenBalanceError,
+    isCheckingTokenBalances,
+    checkedTokenCount,
     addCustomTokenFromInput,
     resetDetectedBalances,
   } = useTokenBalances(activeSafeAddress);
@@ -218,6 +220,8 @@ export default function App() {
             customTrackedTokens={customTrackedTokens}
             tokenBalanceError={tokenBalanceError}
             detectedTokenBalances={detectedTokenBalances}
+            isCheckingTokenBalances={isCheckingTokenBalances}
+            checkedTokenCount={checkedTokenCount}
           />
         ) : null}
 

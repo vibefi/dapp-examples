@@ -1,4 +1,4 @@
-import { useMemo, useState, type Dispatch, type SetStateAction } from "react";
+import { useEffect, useMemo, useRef, useState, type Dispatch, type SetStateAction } from "react";
 import { erc20Abi, getAddress, isAddress, type Address } from "viem";
 import { usePublicClient } from "wagmi";
 import { useQuery } from "@tanstack/react-query";
@@ -20,6 +20,8 @@ type UseTokenBalancesResult = {
   trackedTokenAddresses: Address[];
   detectedTokenBalances: DetectedTokenBalance[];
   tokenBalanceError: string | null;
+  isCheckingTokenBalances: boolean;
+  checkedTokenCount: number;
   addCustomTokenFromInput: () => void;
   resetDetectedBalances: () => void;
 };
@@ -28,6 +30,16 @@ export function useTokenBalances(activeSafeAddress: Address | null): UseTokenBal
   const [customTokenInput, setCustomTokenInput] = useState("");
   const [customTrackedTokens, setCustomTrackedTokens] = useState<Address[]>([]);
   const [tokenBalanceError, setTokenBalanceError] = useState<string | null>(null);
+  const [tokenCheckProgress, setTokenCheckProgress] = useState({
+    isChecking: false,
+    checkedCount: 0,
+    totalCount: 0,
+  });
+  const [liveBalanceEntries, setLiveBalanceEntries] = useState<{ address: Address; balance: bigint }[]>([]);
+  const [metadataMap, setMetadataMap] = useState<Map<string, TokenMetadata>>(new Map());
+  const tokenCheckRunIdRef = useRef(0);
+  const knownMetadataAddressesRef = useRef(new Set<string>());
+  const metadataInFlightRef = useRef(new Set<string>());
 
   const client = usePublicClient();
 
@@ -56,11 +68,41 @@ export function useTokenBalances(activeSafeAddress: Address | null): UseTokenBal
     return deduped;
   }, [customTrackedTokens]);
 
+  useEffect(() => {
+    tokenCheckRunIdRef.current += 1;
+    knownMetadataAddressesRef.current.clear();
+    metadataInFlightRef.current.clear();
+    setLiveBalanceEntries([]);
+    setMetadataMap(new Map());
+    setTokenCheckProgress({ isChecking: false, checkedCount: 0, totalCount: 0 });
+  }, [activeSafeAddress]);
+
   // Fetch all balances via individual readContract calls (no multicall)
-  const { data: balanceEntries, error: balanceQueryError, status: balanceQueryStatus, fetchStatus: balanceFetchStatus } = useQuery({
+  const { error: balanceQueryError, status: balanceQueryStatus, fetchStatus: balanceFetchStatus } = useQuery({
     queryKey: ["tokenBalances", activeSafeAddress, trackedTokenAddresses],
     queryFn: async () => {
-      if (!client || !activeSafeAddress) return [];
+      if (!client || !activeSafeAddress) {
+        tokenCheckRunIdRef.current += 1;
+        setTokenCheckProgress({ isChecking: false, checkedCount: 0, totalCount: 0 });
+        return null;
+      }
+
+      const totalCount = trackedTokenAddresses.length;
+      if (totalCount === 0) {
+        tokenCheckRunIdRef.current += 1;
+        setTokenCheckProgress({ isChecking: false, checkedCount: 0, totalCount: 0 });
+        return null;
+      }
+
+      const runId = tokenCheckRunIdRef.current + 1;
+      tokenCheckRunIdRef.current = runId;
+      const setProgressIfCurrent = (next: { isChecking: boolean; checkedCount: number; totalCount: number }) => {
+        if (tokenCheckRunIdRef.current !== runId) return;
+        setTokenCheckProgress(next);
+      };
+
+      let checkedCount = 0;
+      setProgressIfCurrent({ isChecking: true, checkedCount: 0, totalCount });
 
       console.log("[useTokenBalances] queryFn fired", {
         activeSafeAddress,
@@ -68,63 +110,101 @@ export function useTokenBalances(activeSafeAddress: Address | null): UseTokenBal
         clientChain: client.chain?.id,
       });
 
-      // Try a single read first to validate the client works
-      try {
-        const testAddr = trackedTokenAddresses[0];
-        console.log("[useTokenBalances] testing single readContract for", testAddr, "owner", activeSafeAddress);
-        const testResult = await client.readContract({
-          address: testAddr,
-          abi: erc20Abi,
-          functionName: "balanceOf",
-          args: [activeSafeAddress],
-        });
-        console.log("[useTokenBalances] single test result:", testAddr, String(testResult));
-      } catch (testErr) {
-        console.error("[useTokenBalances] single test readContract FAILED:", testErr);
-      }
+      const fetchTokenMetadata = (addr: Address) => {
+        const normalized = addr.toLowerCase();
+        if (knownMetadataAddressesRef.current.has(normalized)) return;
+        if (metadataInFlightRef.current.has(normalized)) return;
 
-      const results = await Promise.allSettled(
-        trackedTokenAddresses.map((addr) =>
-          client.readContract({
-            address: addr,
-            abi: erc20Abi,
-            functionName: "balanceOf",
-            args: [activeSafeAddress],
-          }),
-        ),
-      );
+        metadataInFlightRef.current.add(normalized);
+        void (async () => {
+          try {
+            const [name, symbol, decimals] = await Promise.allSettled([
+              client.readContract({ address: addr, abi: erc20Abi, functionName: "name" }),
+              client.readContract({ address: addr, abi: erc20Abi, functionName: "symbol" }),
+              client.readContract({ address: addr, abi: erc20Abi, functionName: "decimals" }),
+            ]);
 
-      let fulfilled = 0;
-      let rejected = 0;
-      let nonZero = 0;
-      const sampleErrors: string[] = [];
+            const n = name.status === "fulfilled" ? asNullableString(name.value) : null;
+            const s = symbol.status === "fulfilled" ? asNullableString(symbol.value) : null;
+            const d = decimals.status === "fulfilled" ? asNullableDecimals(decimals.value) : null;
+            if (n === null && s === null && d === null) return;
+            if (tokenCheckRunIdRef.current !== runId) return;
 
-      const entries: { address: Address; balance: bigint }[] = [];
-      for (let i = 0; i < results.length; i++) {
-        const result = results[i];
-        if (result.status === "fulfilled" && typeof result.value === "bigint") {
-          fulfilled++;
-          if (result.value > 0n) {
-            nonZero++;
-            entries.push({ address: trackedTokenAddresses[i], balance: result.value });
+            knownMetadataAddressesRef.current.add(normalized);
+            setMetadataMap((current) => {
+              if (current.has(normalized)) return current;
+              const next = new Map(current);
+              next.set(normalized, { address: addr, name: n, symbol: s, decimals: d } satisfies TokenMetadata);
+              return next;
+            });
+          } finally {
+            metadataInFlightRef.current.delete(normalized);
           }
-        } else {
-          rejected++;
-          if (sampleErrors.length < 3 && result.status === "rejected") {
-            sampleErrors.push(`${trackedTokenAddresses[i]}: ${String(result.reason)}`);
+        })();
+      };
+
+      const maxConcurrentBalanceReads = Math.min(20, totalCount);
+      let nextIndex = 0;
+
+      const runWorker = async () => {
+        while (true) {
+          const index = nextIndex;
+          nextIndex += 1;
+          if (index >= totalCount) return;
+
+          const addr = trackedTokenAddresses[index];
+          const normalizedAddress = addr.toLowerCase();
+
+          try {
+            const balance = await client.readContract({
+              address: addr,
+              abi: erc20Abi,
+              functionName: "balanceOf",
+              args: [activeSafeAddress],
+            });
+
+            if (tokenCheckRunIdRef.current !== runId) return;
+            if (typeof balance !== "bigint") continue;
+            if (balance > 0n) fetchTokenMetadata(addr);
+
+            setLiveBalanceEntries((current) => {
+              const next = [...current];
+              const existingIndex = next.findIndex((entry) => entry.address.toLowerCase() === normalizedAddress);
+
+              if (balance > 0n) {
+                if (existingIndex >= 0) {
+                  if (next[existingIndex].balance === balance) return current;
+                  next[existingIndex] = { address: addr, balance };
+                  return next;
+                }
+                next.push({ address: addr, balance });
+                return next;
+              }
+
+              if (existingIndex >= 0) {
+                next.splice(existingIndex, 1);
+                return next;
+              }
+              return current;
+            });
+          } finally {
+            checkedCount += 1;
+            setProgressIfCurrent({
+              isChecking: true,
+              checkedCount,
+              totalCount,
+            });
           }
         }
-      }
+      };
 
-      console.log("[useTokenBalances] batch results", { fulfilled, rejected, nonZero, total: results.length });
-      if (sampleErrors.length > 0) {
-        console.warn("[useTokenBalances] sample errors:", sampleErrors);
-      }
+      await Promise.all(Array.from({ length: maxConcurrentBalanceReads }, () => runWorker()));
 
-      return entries;
+      setProgressIfCurrent({ isChecking: false, checkedCount: totalCount, totalCount });
+      return null;
     },
     enabled: !!activeSafeAddress && !!client,
-    refetchInterval: 15_000,
+    refetchInterval: 5_000,
   });
 
   // Debug: log query state on every render where relevant values change
@@ -134,58 +214,15 @@ export function useTokenBalances(activeSafeAddress: Address | null): UseTokenBal
     balanceQueryStatus,
     balanceFetchStatus,
     balanceQueryError: balanceQueryError ? String(balanceQueryError) : null,
-    balanceEntriesCount: balanceEntries?.length ?? null,
+    balanceEntriesCount: liveBalanceEntries.length,
     enabled: !!activeSafeAddress && !!client,
   });
 
-  // Fetch metadata only for tokens with non-zero balances
-  const nonZeroAddresses = useMemo(
-    () => (balanceEntries ?? []).map((e) => e.address),
-    [balanceEntries],
-  );
-
-  const { data: metadataMap } = useQuery({
-    queryKey: ["tokenMetadata", nonZeroAddresses],
-    queryFn: async () => {
-      if (!client || nonZeroAddresses.length === 0) return new Map<string, TokenMetadata>();
-
-      const results = await Promise.allSettled(
-        nonZeroAddresses.map(async (addr) => {
-          const [name, symbol, decimals] = await Promise.allSettled([
-            client.readContract({ address: addr, abi: erc20Abi, functionName: "name" }),
-            client.readContract({ address: addr, abi: erc20Abi, functionName: "symbol" }),
-            client.readContract({ address: addr, abi: erc20Abi, functionName: "decimals" }),
-          ]);
-
-          const n = name.status === "fulfilled" ? asNullableString(name.value) : null;
-          const s = symbol.status === "fulfilled" ? asNullableString(symbol.value) : null;
-          const d = decimals.status === "fulfilled" ? asNullableDecimals(decimals.value) : null;
-
-          if (n === null && s === null && d === null) return null;
-          return { address: addr, name: n, symbol: s, decimals: d } satisfies TokenMetadata;
-        }),
-      );
-
-      const map = new Map<string, TokenMetadata>();
-      for (let i = 0; i < results.length; i++) {
-        const result = results[i];
-        if (result.status === "fulfilled" && result.value) {
-          map.set(nonZeroAddresses[i].toLowerCase(), result.value);
-        }
-      }
-      return map;
-    },
-    enabled: nonZeroAddresses.length > 0 && !!client,
-    staleTime: Infinity,
-  });
-
   const detectedTokenBalances = useMemo(() => {
-    if (!balanceEntries) return [];
-
-    return balanceEntries
+    return liveBalanceEntries
       .map((entry) => ({
         address: entry.address,
-        token: metadataMap?.get(entry.address.toLowerCase()) ?? null,
+        token: metadataMap.get(entry.address.toLowerCase()) ?? null,
         balance: entry.balance,
         isCustomTracked: customTrackedTokenSet.has(entry.address.toLowerCase()),
       }))
@@ -194,7 +231,7 @@ export function useTokenBalances(activeSafeAddress: Address | null): UseTokenBal
         const rightValue = right.token?.symbol ?? right.token?.name ?? right.address;
         return leftValue.localeCompare(rightValue);
       });
-  }, [balanceEntries, metadataMap, customTrackedTokenSet]);
+  }, [liveBalanceEntries, metadataMap, customTrackedTokenSet]);
 
   function resetDetectedBalances() {
     setTokenBalanceError(null);
@@ -230,6 +267,8 @@ export function useTokenBalances(activeSafeAddress: Address | null): UseTokenBal
     trackedTokenAddresses,
     detectedTokenBalances,
     tokenBalanceError,
+    isCheckingTokenBalances: tokenCheckProgress.isChecking,
+    checkedTokenCount: tokenCheckProgress.isChecking ? tokenCheckProgress.checkedCount : tokenCheckProgress.totalCount,
     addCustomTokenFromInput,
     resetDetectedBalances,
   };

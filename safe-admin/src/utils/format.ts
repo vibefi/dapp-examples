@@ -14,16 +14,6 @@ export function asNullableDecimals(value: unknown): number | null {
   return null;
 }
 
-export function isSameTokenMetadata(left: TokenMetadata | null, right: TokenMetadata | null): boolean {
-  if (left === null || right === null) return left === right;
-  return (
-    left.address.toLowerCase() === right.address.toLowerCase() &&
-    left.name === right.name &&
-    left.symbol === right.symbol &&
-    left.decimals === right.decimals
-  );
-}
-
 export function describeOperation(operation: 0 | 1): string {
   return operation === 0 ? "CALL" : "DELEGATECALL";
 }
