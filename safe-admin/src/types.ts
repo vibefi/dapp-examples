@@ -1,4 +1,4 @@
-import type { Address, Hex, PublicClient } from "viem";
+import type { Address, Hex } from "viem";
 
 export type SafeOperation = 0 | 1;
 
@@ -63,6 +63,14 @@ export type DecodedErc20TransferLog = {
   amount: bigint;
 };
 
+export type SafeExecutionLog = {
+  logIndex: number;
+  address: Address;
+  topics: Hex[];
+  data: Hex;
+  decodedEvent: string | null;
+};
+
 export type SafeExecutionHistoryItem = {
   chainId: number;
   safeAddress: Address;
@@ -74,6 +82,7 @@ export type SafeExecutionHistoryItem = {
   targetContractToken: TokenMetadata | null;
   decodedErc20Call: DecodedErc20Call | null;
   erc20Transfers: DecodedErc20TransferLog[];
+  allLogs: SafeExecutionLog[];
   timestampMs: number | null;
 };
 
@@ -83,5 +92,3 @@ export type SafeHistoryQuery = {
   lookbackBlocks?: bigint;
   limit?: number;
 };
-
-export type SafeClient = PublicClient;

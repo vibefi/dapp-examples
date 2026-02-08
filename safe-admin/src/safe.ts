@@ -1,85 +1,29 @@
-import { decodeEventLog, decodeFunctionData, getAddress, type Address, type Hex } from "viem";
+import {
+  decodeEventLog,
+  decodeFunctionData,
+  erc20Abi,
+  getAddress,
+  zeroAddress,
+  type Address,
+  type Hex,
+  type PublicClient,
+} from "viem";
 import { ABI } from "./abis";
 import type {
   DecodedErc20Call,
   DecodedErc20TransferLog,
   DecodedExecTransaction,
-  SafeClient,
+  SafeExecutionLog,
   SafeExecutionHistoryItem,
   SafeHistoryQuery,
   SafeOverview,
   TokenMetadata,
 } from "./types";
+import { asNullableDecimals, asNullableString } from "./utils/format";
 
-const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000" as const;
 const ZERO_BYTES32 = "0x0000000000000000000000000000000000000000000000000000000000000000" as const;
 const DEFAULT_LOG_CHUNK_SIZE = 50_000n;
 export const DEFAULT_HISTORY_LOOKBACK_BLOCKS = 250_000n;
-
-const ERC20_ABI = [
-  {
-    type: "function",
-    name: "name",
-    stateMutability: "view",
-    inputs: [],
-    outputs: [{ name: "", type: "string" }],
-  },
-  {
-    type: "function",
-    name: "symbol",
-    stateMutability: "view",
-    inputs: [],
-    outputs: [{ name: "", type: "string" }],
-  },
-  {
-    type: "function",
-    name: "decimals",
-    stateMutability: "view",
-    inputs: [],
-    outputs: [{ name: "", type: "uint8" }],
-  },
-  {
-    type: "function",
-    name: "transfer",
-    stateMutability: "nonpayable",
-    inputs: [
-      { name: "to", type: "address" },
-      { name: "amount", type: "uint256" },
-    ],
-    outputs: [{ name: "", type: "bool" }],
-  },
-  {
-    type: "function",
-    name: "transferFrom",
-    stateMutability: "nonpayable",
-    inputs: [
-      { name: "from", type: "address" },
-      { name: "to", type: "address" },
-      { name: "amount", type: "uint256" },
-    ],
-    outputs: [{ name: "", type: "bool" }],
-  },
-  {
-    type: "function",
-    name: "approve",
-    stateMutability: "nonpayable",
-    inputs: [
-      { name: "spender", type: "address" },
-      { name: "amount", type: "uint256" },
-    ],
-    outputs: [{ name: "", type: "bool" }],
-  },
-  {
-    type: "event",
-    name: "Transfer",
-    anonymous: false,
-    inputs: [
-      { indexed: true, name: "from", type: "address" },
-      { indexed: true, name: "to", type: "address" },
-      { indexed: false, name: "value", type: "uint256" },
-    ],
-  },
-] as const;
 
 type TokenMetadataCache = Map<Address, Promise<TokenMetadata | null>>;
 type DecodedErc20CallWithoutToken =
@@ -107,90 +51,31 @@ type ExecutionSuccessLog = {
   logIndex: number | null;
 };
 
+type ReceiptLogLike = {
+  address: string;
+  data?: Hex;
+  topics: readonly Hex[];
+  logIndex?: number | null;
+};
+
 function asSafeAddress(value: string): Address {
   return getAddress(value.trim());
 }
 
 function asNullableAddress(value: unknown): Address | null {
   if (typeof value !== "string") return null;
-  if (value.toLowerCase() === ZERO_ADDRESS) return null;
+  if (value.toLowerCase() === zeroAddress) return null;
   return getAddress(value);
 }
 
-function asNullableString(value: unknown): string | null {
-  return typeof value === "string" && value.length > 0 ? value : null;
-}
-
-function asNullableDecimals(value: unknown): number | null {
-  if (typeof value === "number") return Number.isFinite(value) ? value : null;
-  if (typeof value === "bigint") {
-    const asNum = Number(value);
-    return Number.isFinite(asNum) ? asNum : null;
-  }
-  return null;
-}
-
-async function getClientChainId(client: SafeClient): Promise<number> {
+async function getClientChainId(client: PublicClient): Promise<number> {
   if (client.chain?.id) return client.chain.id;
   return client.getChainId();
 }
 
-async function readVersion(client: SafeClient, safeAddress: Address): Promise<string | null> {
-  try {
-    return (await client.readContract({
-      address: safeAddress,
-      abi: ABI.safe,
-      functionName: "VERSION",
-    })) as string;
-  } catch {
-    return null;
-  }
-}
-
-async function readGuard(client: SafeClient, safeAddress: Address): Promise<Address | null> {
-  try {
-    const guard = await client.readContract({
-      address: safeAddress,
-      abi: ABI.safe,
-      functionName: "getGuard",
-    });
-    return asNullableAddress(guard);
-  } catch {
-    return null;
-  }
-}
-
-async function readFallbackHandler(client: SafeClient, safeAddress: Address): Promise<Address | null> {
-  try {
-    const fallbackHandler = await client.readContract({
-      address: safeAddress,
-      abi: ABI.safe,
-      functionName: "getFallbackHandler",
-    });
-    return asNullableAddress(fallbackHandler);
-  } catch {
-    return null;
-  }
-}
-
-async function readModules(client: SafeClient, safeAddress: Address): Promise<Address[]> {
-  try {
-    const result = (await client.readContract({
-      address: safeAddress,
-      abi: ABI.safe,
-      functionName: "getModulesPaginated",
-      args: [ZERO_ADDRESS, 25n],
-    })) as [Address[], Address];
-
-    return result[0].map((moduleAddress) => getAddress(moduleAddress));
-  } catch {
-    return [];
-  }
-}
-
 function decodeErc20CallData(data: Hex): DecodedErc20CallWithoutToken | null {
   try {
-    const decoded = decodeFunctionData({ abi: ERC20_ABI, data });
+    const decoded = decodeFunctionData({ abi: erc20Abi, data });
 
     if (decoded.functionName === "transfer") {
       const [to, amount] = decoded.args as [Address, bigint];
@@ -227,7 +112,7 @@ function decodeErc20CallData(data: Hex): DecodedErc20CallWithoutToken | null {
 }
 
 async function readTokenMetadata(
-  client: SafeClient,
+  client: PublicClient,
   tokenAddressInput: Address,
   cache: TokenMetadataCache,
 ): Promise<TokenMetadata | null> {
@@ -243,7 +128,7 @@ async function readTokenMetadata(
       client
         .readContract({
           address: tokenAddress,
-          abi: ERC20_ABI,
+          abi: erc20Abi,
           functionName: "name",
         })
         .then(asNullableString)
@@ -251,7 +136,7 @@ async function readTokenMetadata(
       client
         .readContract({
           address: tokenAddress,
-          abi: ERC20_ABI,
+          abi: erc20Abi,
           functionName: "symbol",
         })
         .then(asNullableString)
@@ -259,7 +144,7 @@ async function readTokenMetadata(
       client
         .readContract({
           address: tokenAddress,
-          abi: ERC20_ABI,
+          abi: erc20Abi,
           functionName: "decimals",
         })
         .then(asNullableDecimals)
@@ -310,8 +195,8 @@ function withTokenMetadata(
 }
 
 async function decodeErc20TransferLogs(
-  client: SafeClient,
-  receiptLogs: readonly { address: Address; data: Hex; topics: readonly Hex[] }[],
+  client: PublicClient,
+  receiptLogs: readonly SafeExecutionLog[],
   tokenCache: TokenMetadataCache,
 ): Promise<DecodedErc20TransferLog[]> {
   const transfers: DecodedErc20TransferLog[] = [];
@@ -319,7 +204,7 @@ async function decodeErc20TransferLogs(
   for (const log of receiptLogs) {
     try {
       const decoded = decodeEventLog({
-        abi: ERC20_ABI,
+        abi: erc20Abi,
         data: log.data,
         topics: log.topics as [Hex, ...Hex[]],
       });
@@ -343,7 +228,53 @@ async function decodeErc20TransferLogs(
   return transfers;
 }
 
-export async function isSafeContract(client: SafeClient, safeAddressInput: string): Promise<boolean> {
+function decodeReceiptLogEvent(log: { address: Address; data: Hex; topics: Hex[] }, safeAddress: Address): string | null {
+  if (log.topics.length === 0) return null;
+  const topics = log.topics as [Hex, ...Hex[]];
+
+  if (log.address.toLowerCase() === safeAddress.toLowerCase()) {
+    try {
+      const decoded = decodeEventLog({
+        abi: ABI.safe,
+        data: log.data,
+        topics,
+      });
+      return `Safe.${decoded.eventName}`;
+    } catch {
+      // no-op
+    }
+  }
+
+  try {
+    const decoded = decodeEventLog({
+      abi: erc20Abi,
+      data: log.data,
+      topics,
+    });
+    return `ERC20.${decoded.eventName}`;
+  } catch {
+    return null;
+  }
+}
+
+function normalizeReceiptLogs(receiptLogs: readonly ReceiptLogLike[], safeAddress: Address): SafeExecutionLog[] {
+  return receiptLogs.map((entry, index) => {
+    const normalized: SafeExecutionLog = {
+      logIndex: entry.logIndex ?? index,
+      address: getAddress(entry.address),
+      data: (entry.data ?? "0x") as Hex,
+      topics: entry.topics.map((topic) => topic as Hex),
+      decodedEvent: null,
+    };
+
+    return {
+      ...normalized,
+      decodedEvent: decodeReceiptLogEvent(normalized, safeAddress),
+    };
+  });
+}
+
+export async function isSafeContract(client: PublicClient, safeAddressInput: string): Promise<boolean> {
   let safeAddress: Address;
   try {
     safeAddress = asSafeAddress(safeAddressInput);
@@ -366,7 +297,7 @@ export async function isSafeContract(client: SafeClient, safeAddressInput: strin
   }
 }
 
-export async function loadSafeOverview(client: SafeClient, safeAddressInput: string): Promise<SafeOverview> {
+export async function loadSafeOverview(client: PublicClient, safeAddressInput: string): Promise<SafeOverview> {
   const safeAddress = asSafeAddress(safeAddressInput);
   const chainIdPromise = getClientChainId(client);
 
@@ -389,10 +320,54 @@ export async function loadSafeOverview(client: SafeClient, safeAddressInput: str
     client.getBalance({
       address: safeAddress,
     }),
-    readVersion(client, safeAddress),
-    readGuard(client, safeAddress),
-    readFallbackHandler(client, safeAddress),
-    readModules(client, safeAddress),
+    (async (): Promise<string | null> => {
+      try {
+        return (await client.readContract({
+          address: safeAddress,
+          abi: ABI.safe,
+          functionName: "VERSION",
+        })) as string;
+      } catch {
+        return null;
+      }
+    })(),
+    (async (): Promise<Address | null> => {
+      try {
+        const guard = await client.readContract({
+          address: safeAddress,
+          abi: ABI.safe,
+          functionName: "getGuard",
+        });
+        return asNullableAddress(guard);
+      } catch {
+        return null;
+      }
+    })(),
+    (async (): Promise<Address | null> => {
+      try {
+        const handler = await client.readContract({
+          address: safeAddress,
+          abi: ABI.safe,
+          functionName: "getFallbackHandler",
+        });
+        return asNullableAddress(handler);
+      } catch {
+        return null;
+      }
+    })(),
+    (async (): Promise<Address[]> => {
+      try {
+        const result = (await client.readContract({
+          address: safeAddress,
+          abi: ABI.safe,
+          functionName: "getModulesPaginated",
+          args: [zeroAddress as Address, 25n],
+        })) as [Address[], Address];
+        return result[0].map((moduleAddress) => getAddress(moduleAddress));
+      } catch {
+        return [];
+      }
+    })(),
   ]);
 
   const owners = (ownersRaw as Address[]).map((owner) => getAddress(owner));
@@ -447,7 +422,7 @@ export function decodeExecTransactionData(data: Hex): DecodedExecTransaction | n
       baseGas,
       gasPrice,
       gasToken: getAddress(gasToken),
-      refundReceiver: refundReceiver === ZERO_ADDRESS ? ZERO_ADDRESS : getAddress(refundReceiver),
+      refundReceiver: refundReceiver === zeroAddress ? zeroAddress : getAddress(refundReceiver),
       signatures,
     };
   } catch {
@@ -456,7 +431,7 @@ export function decodeExecTransactionData(data: Hex): DecodedExecTransaction | n
 }
 
 async function getExecutionSuccessLogsRange(
-  client: SafeClient,
+  client: PublicClient,
   safeAddress: Address,
   fromBlock: bigint,
   toBlock: bigint,
@@ -489,7 +464,7 @@ async function getExecutionSuccessLogsRange(
 }
 
 async function getExecutionSuccessLogsChunked(
-  client: SafeClient,
+  client: PublicClient,
   safeAddress: Address,
   fromBlock: bigint,
   toBlock: bigint,
@@ -506,7 +481,7 @@ async function getExecutionSuccessLogsChunked(
 }
 
 export async function loadSafeExecutionHistory(
-  client: SafeClient,
+  client: PublicClient,
   safeAddressInput: string,
   query: SafeHistoryQuery = {},
 ): Promise<SafeExecutionHistoryItem[]> {
@@ -551,15 +526,8 @@ export async function loadSafeExecutionHistory(
         }
       }
 
-      const erc20Transfers = await decodeErc20TransferLogs(
-        client,
-        receipt.logs.map((entry) => ({
-          address: getAddress(entry.address),
-          data: (entry.data ?? "0x") as Hex,
-          topics: entry.topics as Hex[],
-        })),
-        tokenCache,
-      );
+      const allLogs = normalizeReceiptLogs(receipt.logs as ReceiptLogLike[], safeAddress);
+      const erc20Transfers = await decodeErc20TransferLogs(client, allLogs, tokenCache);
 
       return {
         chainId,
@@ -572,6 +540,7 @@ export async function loadSafeExecutionHistory(
         targetContractToken,
         decodedErc20Call,
         erc20Transfers,
+        allLogs,
         timestampMs: block.timestamp !== undefined ? Number(block.timestamp) * 1000 : null,
       } satisfies SafeExecutionHistoryItem;
     }),
