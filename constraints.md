@@ -18,7 +18,7 @@ In order to ensure safe, reproducible builds for all dapps, VibeFi compiles ever
 If you would like a new package to be added to this list, you can open a [client proposal](TODO: insert link).
 
 ## Files
-- src/ (.ts and .tsx only) 
+- src/ (.ts, .tsx, and .css only) 
 - assets/ (.webp only) 
 - abis/ (.json only) 
 - index.html
