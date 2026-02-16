@@ -33,7 +33,10 @@ export function TokenBalancesCard({
 
   return (
     <section className="card">
-      <h2>Token Balances</h2>
+      <div className="sectionHead">
+        <h2>Token Balances</h2>
+        <span className="chip">{trackedTokenCount} tracked</span>
+      </div>
       <p className="muted">
         Polling {trackedTokenCount} top ERC20 contracts for balances.
       </p>

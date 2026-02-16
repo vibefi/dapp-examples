@@ -189,7 +189,7 @@ export function AssetPanel() {
   }
 
   return (
-    <Card title="Asset Actions (Approve / Supply / Withdraw / Borrow / Repay)">
+    <Card title="Assets to supply or borrow">
       <div className="two">
         <div>
           <Label>Asset</Label>
@@ -223,11 +223,11 @@ export function AssetPanel() {
             <option>Borrow</option>
             <option>Repay</option>
           </Select>
-          {isEth ? <div className="small muted" style={{ marginTop: 6 }}>ETH-native: Supply/Withdraw only (gateway).</div> : null}
+          {isEth ? <div className="small muted topTiny">ETH-native: Supply/Withdraw only (gateway).</div> : null}
         </div>
       </div>
 
-      <div style={{ marginTop: 10 }}>
+      <div className="topGapSm">
         <Label>Amount</Label>
         <div className="two">
           <Input
@@ -329,7 +329,7 @@ export function AssetPanel() {
 
         {isEth ? (
           <div className="small muted">
-            ETH-native actions use <span style={{ fontWeight: 700 }}>WrappedTokenGateway</span>:
+            ETH-native actions use <span className="inlineStrong">WrappedTokenGateway</span>:
             depositETH (payable) and withdrawETH. Use WETH if you want Borrow/Repay.
           </div>
         ) : null}
