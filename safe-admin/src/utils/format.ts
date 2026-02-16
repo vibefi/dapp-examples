@@ -56,8 +56,16 @@ export function isInfiniteLikeUint256(value: bigint): boolean {
 function trimFraction(value: string, maxFractionDigits: number): string {
   const [whole, fraction] = value.split(".");
   if (!fraction) return whole;
-  const trimmed = fraction.slice(0, maxFractionDigits).replace(/0+$/, "");
-  return trimmed.length > 0 ? `${whole}.${trimmed}` : whole;
+  const capped = fraction.slice(0, maxFractionDigits);
+  const trimmed = capped.replace(/0+$/, "");
+  if (trimmed.length > 0) return `${whole}.${trimmed}`;
+
+  const hasNonZeroBeyondPrecision = /[1-9]/.test(fraction.slice(maxFractionDigits));
+  if (whole === "0" && hasNonZeroBeyondPrecision && maxFractionDigits > 0) {
+    return `<0.${"0".repeat(maxFractionDigits - 1)}1`;
+  }
+
+  return whole;
 }
 
 export function formatUnitsDisplay(value: bigint, decimals: number, maxFractionDigits = 6): string {
