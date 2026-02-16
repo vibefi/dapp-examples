@@ -18,7 +18,7 @@ In order to ensure safe, reproducible builds for all dapps, VibeFi compiles ever
 If you would like a new package to be added to this list, you can open a [client proposal](TODO: insert link).
 
 ## Files
-- src/ (.ts and .tsx only) 
+- src/ (.ts, .tsx, and .css only) 
 - assets/ (.webp only) 
 - abis/ (.json only) 
 - index.html
@@ -36,8 +36,40 @@ TODO: schema for addresses.json
 
 ### Manifest
 
-TODO: schema for manifest.json
+`manifest.json` is part of the source bundle contract and must include a
+`capabilities` section when your vapp needs extra injected runtime capabilities.
+
+Current capability surface:
+```json
+{
+  "capabilities": {
+    "ipfs": {
+      "allow": [
+        {
+          "cid": "bafy...",
+          "paths": ["metadata/**"],
+          "as": ["json", "text", "snippet", "image"],
+          "maxBytes": 262144
+        }
+      ]
+    }
+  }
+}
+```
+
+Notes:
+1. `cid` is optional. If omitted, the path rule applies to any CID.
+2. `paths` are allowlist path patterns (no URL/scheme inputs).
+3. `as` is behavior-scoped and must only use: `json`, `text`, `snippet`, `image`.
+4. `maxBytes` is optional and sets an upper bound for reads under that rule.
+5. Runtime permission checks are host-enforced. Review rules are defense-in-depth only.
 
 ## Resources
 - Injected Wallet (`window.ethereum`)
 - Injected RPC_URLs (TODO: maybe we don't need this? could we do all calls via injected wallet?)
+- Injected IPFS data API (`window.vibefiIpfs`) behind manifest capabilities
+
+## Security Requirements for IPFS Data
+1. IPFS-derived content is untrusted data, never executable code.
+2. Do not pass IPFS payloads to execution sinks (`eval`, `new Function`, dynamic `import`, script-tag injection, worker/iframe srcdoc).
+3. Snippets/text from IPFS must be rendered as text nodes (`textContent`), never with `innerHTML`/`dangerouslySetInnerHTML`.
