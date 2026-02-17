@@ -1,9 +1,10 @@
 import { useEffect, useState } from "react";
-import { formatEther, type Address } from "viem";
+import { type Address } from "viem";
 import { DEFAULT_HISTORY_LOOKBACK_BLOCKS } from "../safe";
 import type { SafeExecutionHistoryItem } from "../types";
 import {
   describeOperation,
+  formatEtherDisplay,
   formatBlocks,
   formatErc20Call,
   formatOptionalBlock,
@@ -51,7 +52,10 @@ export function ExecutionHistoryCard({
 
   return (
     <section className="card">
-      <h2>Execution History</h2>
+      <div className="sectionHead">
+        <h2>Execution History</h2>
+        {overviewLoaded ? <span className="chip">{history.length} records</span> : null}
+      </div>
       {overviewLoaded ? (
         <div className="historyToolbar">
           <p className="muted">
@@ -91,11 +95,11 @@ export function ExecutionHistoryCard({
                   <div>Time</div>
                   <div>{formatTimestamp(item.timestampMs)}</div>
                   <div>Payment</div>
-                  <div>{formatEther(item.paymentWei)} ETH</div>
+                  <div>{formatEtherDisplay(item.paymentWei)} ETH</div>
                   <div>To</div>
                   <div>{decoded?.to ?? "unavailable"}</div>
                   <div>Value</div>
-                  <div>{decoded ? `${formatEther(decoded.value)} ETH` : "unavailable"}</div>
+                  <div>{decoded ? `${formatEtherDisplay(decoded.value)} ETH` : "unavailable"}</div>
                   <div>Operation</div>
                   <div>{decoded ? describeOperation(decoded.operation) : "unavailable"}</div>
                 </div>

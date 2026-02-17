@@ -14,6 +14,7 @@ import { useEthBalance } from "./hooks/useEthBalance";
 import { useQuote } from "./hooks/useQuote";
 import { useTokenMeta } from "./hooks/useTokenMeta";
 import { formatAmount, isAddressLike, nowPlusMinutes, safeParseUnits } from "./utils";
+import logoUrl from "../assets/logo.webp";
 
 type Tab = "ethToToken" | "tokenToEth";
 
@@ -40,6 +41,7 @@ export default function App() {
   const [toast, setToast] = useState<string | null>(null);
 
   const [slippageBps, setSlippageBps] = useState<string>("50"); // 0.50%
+  const [slippageOpen, setSlippageOpen] = useState(false);
   const slip = useMemo(() => {
     const n = Number(slippageBps);
     if (!Number.isFinite(n) || n < 0) return 50;
@@ -103,16 +105,23 @@ export default function App() {
     }
   }
 
+  function toggleTab() {
+    setTab((t) => (t === "ethToToken" ? "tokenToEth" : "ethToToken"));
+  }
+
   return (
     <div
       style={{
         minHeight: "100vh",
-        background: "radial-gradient(1000px 600px at 20% 0%, rgba(255,105,180,0.18), transparent), #0b0b10",
+        background:
+          "radial-gradient(600px 400px at 50% 0%, rgba(255,0,122,0.12), transparent 70%), " +
+          "radial-gradient(800px 600px at 50% 0%, rgba(255,0,122,0.06), transparent), " +
+          "#0b0b10",
         color: "white",
         fontFamily: "ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial",
       }}
     >
-      <div style={{ maxWidth: 980, margin: "0 auto", padding: 20, display: "grid", gap: 16 }}>
+      <div style={{ maxWidth: 480, margin: "0 auto", padding: "0 16px" }}>
         <Header
           account={account}
           chainId={chainId}
@@ -121,47 +130,78 @@ export default function App() {
           onSwitchMainnet={onSwitchMainnet}
         />
 
-        {!hasRpcUrl() ? (
-          <Card title="Missing RPC_URL">
-            <div style={{ opacity: 0.85 }}>
-              This app expects an Ethereum JSON-RPC endpoint in <code>RPC_URL</code> (or <code>VITE_RPC_URL</code>).
-              Reads and quotes use that RPC. Wallet writes use <code>window.ethereum</code>.
+        <div style={{ paddingTop: 48 }}>
+          <Card>
+            {/* Title + Slippage row */}
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <div style={{ fontWeight: 700, fontSize: 18 }}>Swap</div>
+              <button
+                onClick={() => setSlippageOpen((o) => !o)}
+                style={{
+                  background: "rgba(255,255,255,0.06)",
+                  border: "1px solid rgba(255,255,255,0.08)",
+                  borderRadius: 12,
+                  padding: "4px 10px",
+                  color: "rgba(255,255,255,0.7)",
+                  cursor: "pointer",
+                  fontSize: 13,
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 4,
+                }}
+              >
+                <span style={{ fontSize: 14 }}>&#9881;</span>
+                {(slip / 100).toFixed(2)}%
+              </button>
             </div>
-          </Card>
-        ) : null}
 
-        <Card
-          title="Uniswap V2 Swap"
-          right={
-            <div style={{ display: "flex", gap: 8 }}>
-              <Button variant={tab === "ethToToken" ? "primary" : "ghost"} onClick={() => setTab("ethToToken")}>
-                ETH → Token
-              </Button>
-              <Button variant={tab === "tokenToEth" ? "primary" : "ghost"} onClick={() => setTab("tokenToEth")}>
-                Token → ETH
-              </Button>
-            </div>
-          }
-        >
-          {needsMainnet ? (
-            <div style={{ padding: 12, borderRadius: 12, background: "rgba(255,220,120,0.12)", border: "1px solid rgba(255,220,120,0.25)" }}>
-              Connected to chainId <b>{chainId}</b>. This app is for <b>Ethereum mainnet (1)</b>. Switch networks to continue.
-            </div>
-          ) : null}
+            {slippageOpen && (
+              <div style={{
+                background: "rgba(255,255,255,0.04)",
+                borderRadius: 12,
+                padding: "10px 12px",
+                display: "flex",
+                alignItems: "center",
+                gap: 8,
+              }}>
+                <span style={{ fontSize: 13, opacity: 0.7, whiteSpace: "nowrap" }}>Slippage (bps):</span>
+                <input
+                  value={slippageBps}
+                  onChange={(e) => setSlippageBps(e.target.value)}
+                  inputMode="numeric"
+                  placeholder="50"
+                  style={{
+                    ...inputStyle(),
+                    padding: "6px 10px",
+                    fontSize: 13,
+                    maxWidth: 80,
+                  }}
+                />
+                <span style={{ fontSize: 12, opacity: 0.5 }}>50 = 0.50%</span>
+              </div>
+            )}
 
-          <div style={{ display: "grid", gap: 16 }}>
-            <Field
-              label="Slippage (basis points)"
-              hint="50 = 0.50%, 100 = 1.00%"
-            >
-              <input
-                value={slippageBps}
-                onChange={(e) => setSlippageBps(e.target.value)}
-                inputMode="numeric"
-                style={inputStyle()}
-                placeholder="50"
-              />
-            </Field>
+            {/* Pill tabs */}
+            <div style={{
+              display: "flex",
+              gap: 4,
+              background: "rgba(255,255,255,0.04)",
+              borderRadius: 20,
+              padding: 4,
+            }}>
+              <TabPill active={tab === "ethToToken"} onClick={() => setTab("ethToToken")}>
+                ETH &rarr; Token
+              </TabPill>
+              <TabPill active={tab === "tokenToEth"} onClick={() => setTab("tokenToEth")}>
+                Token &rarr; ETH
+              </TabPill>
+            </div>
+
+            {needsMainnet ? (
+              <div style={{ padding: 12, borderRadius: 12, background: "rgba(255,220,120,0.12)", border: "1px solid rgba(255,220,120,0.25)", fontSize: 13 }}>
+                Connected to chainId <b>{chainId}</b>. This app is for <b>Ethereum mainnet (1)</b>. Switch networks to continue.
+              </div>
+            ) : null}
 
             {tab === "ethToToken" ? (
               <EthToToken
@@ -169,6 +209,8 @@ export default function App() {
                 disabled={!account || needsMainnet}
                 slipBps={slip}
                 onToast={setToast}
+                onFlip={toggleTab}
+                onConnect={onConnect}
               />
             ) : (
               <TokenToEth
@@ -176,27 +218,25 @@ export default function App() {
                 disabled={!account || needsMainnet}
                 slipBps={slip}
                 onToast={setToast}
+                onFlip={toggleTab}
+                onConnect={onConnect}
               />
             )}
-          </div>
-        </Card>
+          </Card>
 
-        <Card title="Contracts">
-          <div style={{ display: "grid", gap: 8, opacity: 0.9 }}>
-            <div>Router02: <code>{addresses.UniswapV2Router02}</code></div>
-            <div>Factory: <code>{addresses.UniswapV2Factory}</code></div>
-            <div>WETH: <code>{addresses.WETH9}</code></div>
-            <div style={{ fontSize: 12, opacity: 0.8 }}>
-              Quotes use <code>getAmountsOut</code>. Swaps use <code>swapExactETHForTokens</code> and <code>swapExactTokensForETH</code>.
-            </div>
+          {/* Contracts footer */}
+          <div style={{ marginTop: 16, padding: "12px 4px" }}>
+            <ContractsFooter />
           </div>
-        </Card>
+        </div>
       </div>
 
       {toast ? <Toast message={toast} onClose={() => setToast(null)} /> : null}
     </div>
   );
 }
+
+/* ─── Header ─── */
 
 function Header(props: {
   account: Address | null;
@@ -206,45 +246,157 @@ function Header(props: {
   onSwitchMainnet: () => void;
 }) {
   const short = props.account ? `${props.account.slice(0, 6)}…${props.account.slice(-4)}` : null;
-  const balance = props.ethBalance !== null ? formatAmount(props.ethBalance, 18, 5) : "—";
+  const balance = props.ethBalance !== null ? formatAmount(props.ethBalance, 18, 5) : null;
 
   return (
-    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
-      <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
-        <img src="/assets/logo.webp" width={42} height={42} style={{ borderRadius: 12 }} />
-        <div style={{ display: "grid" }}>
-          <div style={{ fontWeight: 800, letterSpacing: 0.2 }}>Uniswap V2 — Mainnet</div>
-          <div style={{ opacity: 0.75, fontSize: 12 }}>
-            Read RPC: <code>{hasRpcUrl() ? "RPC_URL" : "missing"}</code> · Wallet: <code>window.ethereum</code>
-          </div>
-        </div>
+    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "16px 0" }}>
+      <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+        <img src={logoUrl} width={32} height={32} style={{ borderRadius: 10 }} />
+        <span style={{ fontWeight: 700, fontSize: 15 }}>Uniswap V2</span>
       </div>
 
-      <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
-        {props.chainId !== null ? (
-          <span style={{ opacity: 0.85, fontSize: 12 }}>
-            chainId <b>{props.chainId}</b>
-          </span>
-        ) : null}
+      <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
         {props.account ? (
-          <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
-            <span style={{ opacity: 0.9, fontSize: 12 }}>Ξ {balance}</span>
-            <span style={{ padding: "8px 10px", borderRadius: 12, border: "1px solid rgba(255,255,255,0.12)" }}>
-              {short}
-            </span>
-            {props.chainId !== 1 && props.chainId !== null ? (
-              <Button onClick={props.onSwitchMainnet}>Switch to Mainnet</Button>
-            ) : null}
-          </div>
+          <>
+            {props.chainId !== null && props.chainId !== 1 && (
+              <Button variant="ghost" onClick={props.onSwitchMainnet} style={{ fontSize: 12, padding: "6px 10px" }}>
+                Switch to Mainnet
+              </Button>
+            )}
+            <div style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 0,
+              borderRadius: 20,
+              border: "1px solid rgba(255,255,255,0.10)",
+              background: "rgba(255,255,255,0.04)",
+              overflow: "hidden",
+            }}>
+              {balance !== null && (
+                <span style={{ padding: "7px 10px", fontSize: 13, opacity: 0.85 }}>
+                  {balance} ETH
+                </span>
+              )}
+              <span style={{
+                padding: "7px 12px",
+                fontSize: 13,
+                background: "rgba(255,255,255,0.06)",
+                borderLeft: "1px solid rgba(255,255,255,0.08)",
+                display: "flex",
+                alignItems: "center",
+                gap: 6,
+              }}>
+                {props.chainId !== null && (
+                  <span style={{
+                    width: 8, height: 8, borderRadius: "50%",
+                    background: props.chainId === 1 ? "#27AE60" : "#E67E22",
+                    display: "inline-block",
+                  }} />
+                )}
+                {short}
+              </span>
+            </div>
+          </>
         ) : (
-          <Button onClick={props.onConnect}>Connect Wallet</Button>
+          <Button onClick={props.onConnect} style={{ borderRadius: 20, padding: "8px 16px", fontSize: 14 }}>
+            Connect Wallet
+          </Button>
         )}
       </div>
     </div>
   );
 }
 
-function EthToToken(props: { account: Address | null; disabled: boolean; slipBps: number; onToast: (s: string) => void }) {
+/* ─── Tab pill ─── */
+
+function TabPill(props: { active: boolean; onClick: () => void; children: React.ReactNode }) {
+  return (
+    <button
+      onClick={props.onClick}
+      style={{
+        flex: 1,
+        padding: "8px 0",
+        borderRadius: 16,
+        border: "none",
+        cursor: "pointer",
+        fontWeight: 600,
+        fontSize: 14,
+        background: props.active ? "rgba(255,0,122,0.15)" : "transparent",
+        color: props.active ? "#FF007A" : "rgba(255,255,255,0.5)",
+        transition: "background 0.15s, color 0.15s",
+        fontFamily: "inherit",
+      }}
+    >
+      {props.children}
+    </button>
+  );
+}
+
+/* ─── Swap direction arrow ─── */
+
+function SwapArrow(props: { onClick: () => void }) {
+  return (
+    <div style={{ display: "flex", justifyContent: "center", margin: "-10px 0", position: "relative", zIndex: 2 }}>
+      <button
+        onClick={props.onClick}
+        style={{
+          width: 36,
+          height: 36,
+          borderRadius: "50%",
+          border: "3px solid #1a1a24",
+          background: "rgba(255,255,255,0.06)",
+          color: "rgba(255,255,255,0.7)",
+          cursor: "pointer",
+          fontSize: 16,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          transition: "background 0.15s",
+        }}
+        title="Switch direction"
+      >
+        ↓
+      </button>
+    </div>
+  );
+}
+
+/* ─── Input panel wrapper ─── */
+
+function InputPanel(props: { label: string; children: React.ReactNode }) {
+  return (
+    <div style={{
+      background: "rgba(255,255,255,0.04)",
+      borderRadius: 16,
+      padding: "12px 14px",
+      display: "grid",
+      gap: 8,
+    }}>
+      <span style={{ fontSize: 13, color: "rgba(255,255,255,0.5)", fontWeight: 500 }}>{props.label}</span>
+      {props.children}
+    </div>
+  );
+}
+
+/* ─── Inline quote row ─── */
+
+function QuoteRow(props: { label: string; value: string; muted?: boolean }) {
+  return (
+    <div style={{
+      display: "flex",
+      justifyContent: "space-between",
+      fontSize: 13,
+      color: props.muted ? "rgba(255,255,255,0.45)" : "rgba(255,255,255,0.7)",
+    }}>
+      <span>{props.label}</span>
+      <span>{props.value}</span>
+    </div>
+  );
+}
+
+/* ─── ETH → Token ─── */
+
+function EthToToken(props: { account: Address | null; disabled: boolean; slipBps: number; onToast: (s: string) => void; onFlip: () => void; onConnect: () => void }) {
   const [tokenOutRaw, setTokenOutRaw] = useState<string>("");
   const [ethIn, setEthIn] = useState<string>("0.01");
 
@@ -300,63 +452,71 @@ function EthToToken(props: { account: Address | null; disabled: boolean; slipBps
   }
 
   return (
-    <div style={{ display: "grid", gap: 14 }}>
-      <Field label="Token out (ERC-20 address)" error={tokenErr}>
-        <input
-          value={tokenOutRaw}
-          onChange={(e) => setTokenOutRaw(e.target.value.trim())}
-          placeholder="0x…"
-          style={inputStyle()}
-        />
-      </Field>
-
-      <Field label="ETH in" hint={props.account ? "From connected wallet" : undefined}>
+    <div style={{ display: "grid", gap: 0 }}>
+      {/* You pay */}
+      <InputPanel label="You pay">
         <input
           value={ethIn}
           onChange={(e) => setEthIn(e.target.value)}
           inputMode="decimal"
-          placeholder="0.01"
-          style={inputStyle()}
+          placeholder="0.0"
+          style={amountInputStyle()}
         />
-      </Field>
+        <span style={{ fontSize: 13, opacity: 0.5 }}>ETH</span>
+      </InputPanel>
 
-      <Card title="Quote">
-        {quote.status === "idle" ? (
-          <div style={{ opacity: 0.8 }}>Enter token address and amount to quote.</div>
-        ) : quote.status === "loading" ? (
-          <div style={{ opacity: 0.8 }}>Fetching quote…</div>
-        ) : quote.status === "error" ? (
-          <div style={{ color: "#ff6b6b" }}>{quote.error}</div>
+      <SwapArrow onClick={props.onFlip} />
+
+      {/* You receive */}
+      <InputPanel label="You receive">
+        <input
+          value={tokenOutRaw}
+          onChange={(e) => setTokenOutRaw(e.target.value.trim())}
+          placeholder="Token address 0x…"
+          style={{ ...inputStyle(), fontSize: 13 }}
+        />
+        {tokenErr && <div style={{ color: "#ff6b6b", fontSize: 12 }}>{tokenErr}</div>}
+        <div style={amountDisplayStyle()}>
+          {quote.status === "ready" && outMeta
+            ? `${formatAmount(quote.amountOut, outMeta.decimals)} ${outMeta.symbol}`
+            : quote.status === "loading"
+              ? "Fetching…"
+              : "—"}
+        </div>
+      </InputPanel>
+
+      {/* Quote info */}
+      {quote.status === "ready" && outMeta && minOut && (
+        <div style={{ marginTop: 12, display: "grid", gap: 4, borderTop: "1px solid rgba(255,255,255,0.06)", paddingTop: 10 }}>
+          <QuoteRow
+            label={`1 ETH`}
+            value={`≈ ${amountIn && amountIn > 0n ? formatAmount((quote.amountOut * parseEther("1")) / amountIn, outMeta.decimals) : "—"} ${outMeta.symbol}`}
+          />
+          <QuoteRow label={`Min received (${props.slipBps / 100}% slippage)`} value={`${formatAmount(minOut, outMeta.decimals)} ${outMeta.symbol}`} muted />
+        </div>
+      )}
+      {quote.status === "error" && (
+        <div style={{ marginTop: 8, color: "#ff6b6b", fontSize: 13 }}>{quote.error}</div>
+      )}
+
+      <div style={{ marginTop: 14 }}>
+        {!props.account ? (
+          <Button variant="cta" onClick={props.onConnect}>
+            Connect Wallet
+          </Button>
         ) : (
-          <div style={{ display: "grid", gap: 6 }}>
-            <div>
-              Estimated out:{" "}
-              <b>
-                {outMeta ? formatAmount(quote.amountOut, outMeta.decimals) : quote.amountOut.toString()}{" "}
-                {outMeta?.symbol ?? ""}
-              </b>
-            </div>
-            <div style={{ opacity: 0.85 }}>
-              Min out (slippage {props.slipBps / 100}%):{" "}
-              <b>{outMeta && minOut ? `${formatAmount(minOut, outMeta.decimals)} ${outMeta.symbol}` : "—"}</b>
-            </div>
-          </div>
+          <Button variant="cta" disabled={props.disabled || quote.status !== "ready"} onClick={onSwap}>
+            {quote.status === "loading" ? "Fetching quote…" : "Swap"}
+          </Button>
         )}
-      </Card>
-
-      <Button disabled={props.disabled || quote.status !== "ready"} onClick={onSwap}>
-        Swap ETH → {outMeta?.symbol ?? "Token"}
-      </Button>
-
-      <div style={{ fontSize: 12, opacity: 0.75 }}>
-        This uses Uniswap V2 Router02 <code>swapExactETHForTokens</code>. For ERC-20s that take a fee-on-transfer, you&apos;d typically use the
-        fee-supporting variant; this demo uses the standard function.
       </div>
     </div>
   );
 }
 
-function TokenToEth(props: { account: Address | null; disabled: boolean; slipBps: number; onToast: (s: string) => void }) {
+/* ─── Token → ETH ─── */
+
+function TokenToEth(props: { account: Address | null; disabled: boolean; slipBps: number; onToast: (s: string) => void; onFlip: () => void; onConnect: () => void }) {
   const [tokenInRaw, setTokenInRaw] = useState<string>("");
   const [tokenInAmount, setTokenInAmount] = useState<string>("");
 
@@ -440,95 +600,166 @@ function TokenToEth(props: { account: Address | null; disabled: boolean; slipBps
   }
 
   return (
-    <div style={{ display: "grid", gap: 14 }}>
-      <Field label="Token in (ERC-20 address)" error={tokenErr}>
+    <div style={{ display: "grid", gap: 0 }}>
+      {/* You pay */}
+      <InputPanel label={`You pay${inMeta ? ` (${inMeta.symbol})` : ""}`}>
         <input
           value={tokenInRaw}
           onChange={(e) => setTokenInRaw(e.target.value.trim())}
-          placeholder="0x…"
-          style={inputStyle()}
+          placeholder="Token address 0x…"
+          style={{ ...inputStyle(), fontSize: 13 }}
         />
-      </Field>
-
-      <Field
-        label={`Amount in${inMeta ? ` (${inMeta.symbol})` : ""}`}
-        hint={props.account && inMeta && tokenBal !== null ? `Balance: ${formatAmount(tokenBal, inMeta.decimals)} ${inMeta.symbol}` : undefined}
-      >
+        {tokenErr && <div style={{ color: "#ff6b6b", fontSize: 12 }}>{tokenErr}</div>}
         <input
           value={tokenInAmount}
           onChange={(e) => setTokenInAmount(e.target.value)}
           inputMode="decimal"
           placeholder="0.0"
-          style={inputStyle()}
+          style={amountInputStyle()}
         />
-      </Field>
-
-      <Card title="Approval">
-        {!inMeta ? (
-          <div style={{ opacity: 0.8 }}>Enter a token address to check allowance.</div>
-        ) : allowance === null ? (
-          <div style={{ opacity: 0.8 }}>Fetching allowance…</div>
-        ) : (
-          <div style={{ display: "grid", gap: 6 }}>
-            <div>
-              Allowance to Router: <b>{formatAmount(allowance, inMeta.decimals)} {inMeta.symbol}</b>
-            </div>
-            {needsApprove ? (
-              <div style={{ opacity: 0.85 }}>You need to approve the Router before swapping.</div>
-            ) : (
-              <div style={{ opacity: 0.85 }}>Allowance is sufficient.</div>
-            )}
-          </div>
+        {props.account && inMeta && tokenBal !== null && (
+          <span style={{ fontSize: 12, opacity: 0.45 }}>Balance: {formatAmount(tokenBal, inMeta.decimals)} {inMeta.symbol}</span>
         )}
-        <div style={{ marginTop: 10 }}>
-          <Button disabled={props.disabled || !needsApprove} onClick={onApprove}>
+      </InputPanel>
+
+      <SwapArrow onClick={props.onFlip} />
+
+      {/* You receive */}
+      <InputPanel label="You receive">
+        <div style={amountDisplayStyle()}>
+          {quote.status === "ready" && minOut
+            ? `${formatAmount(quote.amountOut, 18)} ETH`
+            : quote.status === "loading"
+              ? "Fetching…"
+              : "—"}
+        </div>
+        <span style={{ fontSize: 13, opacity: 0.5 }}>ETH</span>
+      </InputPanel>
+
+      {/* Approval row */}
+      {inMeta && needsApprove && (
+        <div style={{
+          marginTop: 10,
+          padding: "10px 14px",
+          borderRadius: 12,
+          background: "rgba(255,220,120,0.08)",
+          border: "1px solid rgba(255,220,120,0.15)",
+          display: "grid",
+          gap: 8,
+          fontSize: 13,
+        }}>
+          <div style={{ opacity: 0.85 }}>
+            Allowance to Router: <b>{formatAmount(allowance!, inMeta.decimals)} {inMeta.symbol}</b> — approval needed.
+          </div>
+          <Button onClick={onApprove} disabled={props.disabled} style={{ fontSize: 13, padding: "8px 14px" }}>
             Approve Router
           </Button>
-        </div>
-        <div style={{ marginTop: 8, fontSize: 12, opacity: 0.7 }}>
-          This approves <code>uint256.max</code> for convenience. Consider approving only what you intend to swap for production apps.
-        </div>
-      </Card>
-
-      <Card title="Quote">
-        {quote.status === "idle" ? (
-          <div style={{ opacity: 0.8 }}>Enter amount to quote.</div>
-        ) : quote.status === "loading" ? (
-          <div style={{ opacity: 0.8 }}>Fetching quote…</div>
-        ) : quote.status === "error" ? (
-          <div style={{ color: "#ff6b6b" }}>{quote.error}</div>
-        ) : (
-          <div style={{ display: "grid", gap: 6 }}>
-            <div>
-              Estimated out: <b>{formatAmount(quote.amountOut, 18)} ETH</b>
-            </div>
-            <div style={{ opacity: 0.85 }}>
-              Min out (slippage {props.slipBps / 100}%): <b>{minOut ? `${formatAmount(minOut, 18)} ETH` : "—"}</b>
-            </div>
+          <div style={{ fontSize: 11, opacity: 0.5 }}>
+            Approves <code>uint256.max</code> for convenience.
           </div>
+        </div>
+      )}
+
+      {/* Quote info */}
+      {quote.status === "ready" && minOut && (
+        <div style={{ marginTop: 12, display: "grid", gap: 4, borderTop: "1px solid rgba(255,255,255,0.06)", paddingTop: 10 }}>
+          <QuoteRow
+            label={`1 ${inMeta?.symbol ?? "Token"}`}
+            value={`≈ ${amountIn && amountIn > 0n ? formatAmount((quote.amountOut * 10n ** BigInt(inMeta?.decimals ?? 18)) / amountIn, 18) : "—"} ETH`}
+          />
+          <QuoteRow label={`Min received (${props.slipBps / 100}% slippage)`} value={`${formatAmount(minOut, 18)} ETH`} muted />
+        </div>
+      )}
+      {quote.status === "error" && (
+        <div style={{ marginTop: 8, color: "#ff6b6b", fontSize: 13 }}>{quote.error}</div>
+      )}
+
+      <div style={{ marginTop: 14 }}>
+        {!props.account ? (
+          <Button variant="cta" onClick={props.onConnect}>
+            Connect Wallet
+          </Button>
+        ) : (
+          <Button
+            variant="cta"
+            disabled={props.disabled || quote.status !== "ready" || needsApprove}
+            onClick={onSwap}
+          >
+            {needsApprove ? "Approve First" : quote.status === "loading" ? "Fetching quote…" : "Swap"}
+          </Button>
         )}
-      </Card>
-
-      <Button disabled={props.disabled || quote.status !== "ready" || needsApprove} onClick={onSwap}>
-        Swap {inMeta?.symbol ?? "Token"} → ETH
-      </Button>
-
-      <div style={{ fontSize: 12, opacity: 0.75 }}>
-        This uses Uniswap V2 Router02 <code>swapExactTokensForETH</code> with path <code>[tokenIn, WETH]</code>.
       </div>
     </div>
   );
 }
 
+/* ─── Contracts footer ─── */
+
+function ContractsFooter() {
+  const [open, setOpen] = useState(false);
+
+  return (
+    <div style={{ textAlign: "center" }}>
+      <button
+        onClick={() => setOpen((o) => !o)}
+        style={{
+          background: "none",
+          border: "none",
+          color: "rgba(255,255,255,0.3)",
+          cursor: "pointer",
+          fontSize: 12,
+          fontFamily: "inherit",
+        }}
+      >
+        Contracts {open ? "▲" : "▼"}
+      </button>
+      {open && (
+        <div style={{ marginTop: 8, fontSize: 11, color: "rgba(255,255,255,0.35)", display: "grid", gap: 4 }}>
+          <div>Router02: <code>{addresses.UniswapV2Router02}</code></div>
+          <div>Factory: <code>{addresses.UniswapV2Factory}</code></div>
+          <div>WETH: <code>{addresses.WETH9}</code></div>
+          <div style={{ opacity: 0.7 }}>
+            Quotes: <code>getAmountsOut</code> · Swaps: <code>swapExactETHForTokens</code> / <code>swapExactTokensForETH</code>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ─── Styles ─── */
+
 function inputStyle(): React.CSSProperties {
   return {
     padding: "10px 12px",
     borderRadius: 12,
-    border: "1px solid rgba(255,255,255,0.12)",
-    background: "rgba(255,255,255,0.04)",
+    border: "1px solid rgba(255,255,255,0.15)",
+    background: "rgba(255,255,255,0.06)",
     color: "white",
     outline: "none",
     width: "100%",
     fontFamily: "inherit",
+    boxSizing: "border-box",
+  };
+}
+
+function amountInputStyle(): React.CSSProperties {
+  return {
+    ...inputStyle(),
+    fontSize: 24,
+    fontWeight: 500,
+    padding: "8px 8px",
+    borderRadius: 10,
+    border: "1px solid rgba(255,255,255,0.12)",
+    background: "rgba(255,255,255,0.04)",
+  };
+}
+
+function amountDisplayStyle(): React.CSSProperties {
+  return {
+    fontSize: 24,
+    fontWeight: 500,
+    color: "rgba(255,255,255,0.6)",
+    padding: "4px 0",
   };
 }

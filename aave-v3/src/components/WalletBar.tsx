@@ -10,15 +10,15 @@ export function WalletBar() {
   const { disconnect } = useDisconnect()
 
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+    <div className="walletBar">
       <span className="pill">
         <span className="muted">Wallet</span>
-        <span style={{ fontWeight: 800 }}>{isConnected ? shortenAddress(address) : 'Not connected'}</span>
+        <span className="pillValue">{isConnected ? shortenAddress(address) : 'Not connected'}</span>
       </span>
 
       <span className="pill">
         <span className="muted">Chain</span>
-        <span style={{ fontWeight: 800 }}>{chainId ?? '—'}</span>
+        <span className="pillValue">{chainId ?? '—'}</span>
       </span>
 
       {!isConnected ? (

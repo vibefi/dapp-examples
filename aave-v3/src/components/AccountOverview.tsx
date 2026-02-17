@@ -2,7 +2,7 @@ import * as React from 'react'
 import { useAccount, useReadContract } from 'wagmi'
 import { AAVE } from '../aave'
 import { Card } from '../ui'
-import { formatUnits, hfColor } from '../format'
+import { formatHealthFactor, formatUnits, hfColor } from '../format'
 
 const BASE_DECIMALS = 8
 
@@ -50,12 +50,12 @@ export function AccountOverview() {
   const hfClass = hfColor(hf)
 
   return (
-    <Card title="Account Overview (Aave Pool.getUserAccountData)" right={<span className="pill muted">Read-only RPC</span>}>
+    <Card title="Your supplies" right={<span className="pill muted">Read-only RPC</span>}>
       {!isConnected ? <div className="muted small">Connect your wallet to load account data.</div> : null}
       {isLoading ? <div className="muted small">Loading…</div> : null}
       {error ? <div className="bad small">Error: {String((error as any).message ?? error)}</div> : null}
 
-      <div className="kpi" style={{ marginTop: 12 }}>
+      <div className="kpi topGap">
         <div className="item">
           <div className="label">Total collateral (base currency)</div>
           <div className="value">{fmtBase(d?.totalCollateralBase)}</div>
@@ -70,7 +70,7 @@ export function AccountOverview() {
         </div>
         <div className="item">
           <div className="label">Health factor</div>
-          <div className={`value ${hfClass}`}>{formatUnits(hf, 18, 4)}</div>
+          <div className={`value ${hfClass}`}>{formatHealthFactor(hf, 4)}</div>
           <div className="small muted">Liquidation risk if &lt; 1.0</div>
         </div>
       </div>

@@ -4,8 +4,8 @@ export function Card(props: React.PropsWithChildren<{ title?: string; right?: Re
   return (
     <div className="card">
       {(props.title || props.right) && (
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
-          <div style={{ fontWeight: 900, letterSpacing: 0.2 }}>{props.title}</div>
+        <div className="cardHeader">
+          <div className="cardTitle">{props.title}</div>
           <div>{props.right}</div>
         </div>
       )}
