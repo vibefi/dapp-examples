@@ -1,4 +1,4 @@
-import raw from "../addresses.json";
+import vibefi from "../vibefi.json";
 
 export type Address = `0x${string}`;
 
@@ -19,7 +19,7 @@ type Addresses = {
   assets: Record<string, Asset>;
 };
 
-const json = raw as AddressesJson;
+const json = (vibefi as { addresses: AddressesJson }).addresses;
 
 export const ADDRESSES: Addresses = {
   chainId: 1,
