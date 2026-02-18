@@ -13,10 +13,12 @@ import type {
   DecodedErc20Call,
   DecodedErc20TransferLog,
   DecodedExecTransaction,
+  SafeOperation,
   SafeExecutionLog,
   SafeExecutionHistoryItem,
   SafeHistoryQuery,
   SafeOverview,
+  SafeTransactionPayload,
   TokenMetadata,
 } from "./types";
 import { asNullableDecimals, asNullableString } from "./utils/format";
@@ -547,4 +549,43 @@ export async function loadSafeExecutionHistory(
   );
 
   return settled.flatMap((item) => (item.status === "fulfilled" ? [item.value] : []));
+}
+
+export type SafeTransactionHashRequest = {
+  to: Address;
+  value: bigint;
+  data: Hex;
+  operation: SafeOperation;
+  safeTxGas: bigint;
+  baseGas: bigint;
+  gasPrice: bigint;
+  gasToken: Address;
+  refundReceiver: Address;
+  nonce: bigint;
+};
+
+export async function getSafeTransactionHash(
+  client: PublicClient,
+  safeAddressInput: string,
+  tx: SafeTransactionHashRequest | SafeTransactionPayload,
+): Promise<Hex> {
+  const safeAddress = asSafeAddress(safeAddressInput);
+  const hash = (await client.readContract({
+    address: safeAddress,
+    abi: ABI.safe,
+    functionName: "getTransactionHash",
+    args: [
+      tx.to,
+      tx.value,
+      tx.data,
+      tx.operation,
+      tx.safeTxGas,
+      tx.baseGas,
+      tx.gasPrice,
+      tx.gasToken,
+      tx.refundReceiver,
+      tx.nonce,
+    ],
+  })) as Hex;
+  return hash;
 }

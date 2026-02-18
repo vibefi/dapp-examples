@@ -22,6 +22,52 @@
   },
   {
     "type": "function",
+    "name": "addOwnerWithThreshold",
+    "stateMutability": "nonpayable",
+    "inputs": [
+      { "name": "owner", "type": "address" },
+      { "name": "_threshold", "type": "uint256" }
+    ],
+    "outputs": []
+  },
+  {
+    "type": "function",
+    "name": "removeOwner",
+    "stateMutability": "nonpayable",
+    "inputs": [
+      { "name": "prevOwner", "type": "address" },
+      { "name": "owner", "type": "address" },
+      { "name": "_threshold", "type": "uint256" }
+    ],
+    "outputs": []
+  },
+  {
+    "type": "function",
+    "name": "changeThreshold",
+    "stateMutability": "nonpayable",
+    "inputs": [{ "name": "_threshold", "type": "uint256" }],
+    "outputs": []
+  },
+  {
+    "type": "function",
+    "name": "getTransactionHash",
+    "stateMutability": "view",
+    "inputs": [
+      { "name": "to", "type": "address" },
+      { "name": "value", "type": "uint256" },
+      { "name": "data", "type": "bytes" },
+      { "name": "operation", "type": "uint8" },
+      { "name": "safeTxGas", "type": "uint256" },
+      { "name": "baseGas", "type": "uint256" },
+      { "name": "gasPrice", "type": "uint256" },
+      { "name": "gasToken", "type": "address" },
+      { "name": "refundReceiver", "type": "address" },
+      { "name": "_nonce", "type": "uint256" }
+    ],
+    "outputs": [{ "name": "", "type": "bytes32" }]
+  },
+  {
+    "type": "function",
     "name": "nonce",
     "stateMutability": "view",
     "inputs": [],
@@ -80,5 +126,23 @@
       { "name": "txHash", "type": "bytes32", "indexed": true },
       { "name": "payment", "type": "uint256", "indexed": false }
     ]
+  },
+  {
+    "type": "event",
+    "name": "AddedOwner",
+    "anonymous": false,
+    "inputs": [{ "name": "owner", "type": "address", "indexed": true }]
+  },
+  {
+    "type": "event",
+    "name": "RemovedOwner",
+    "anonymous": false,
+    "inputs": [{ "name": "owner", "type": "address", "indexed": true }]
+  },
+  {
+    "type": "event",
+    "name": "ChangedThreshold",
+    "anonymous": false,
+    "inputs": [{ "name": "threshold", "type": "uint256", "indexed": false }]
   }
 ]

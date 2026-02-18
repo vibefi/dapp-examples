@@ -92,3 +92,58 @@ export type SafeHistoryQuery = {
   lookbackBlocks?: bigint;
   limit?: number;
 };
+
+export type SafeTransactionPayload = {
+  to: Address;
+  value: bigint;
+  data: Hex;
+  operation: SafeOperation;
+  safeTxGas: bigint;
+  baseGas: bigint;
+  gasPrice: bigint;
+  gasToken: Address;
+  refundReceiver: Address;
+  nonce: bigint;
+};
+
+export type SafeProposalSignature = {
+  owner: Address;
+  signature: Hex;
+};
+
+export type SafeProposedTransaction = {
+  id: string;
+  createdAtMs: number;
+  updatedAtMs: number;
+  chainId: number;
+  safeAddress: Address;
+  safeTxHash: Hex;
+  title: string;
+  description: string | null;
+  tx: SafeTransactionPayload;
+  signatures: SafeProposalSignature[];
+  executedTxHash: Hex | null;
+  executedAtMs: number | null;
+};
+
+export type SharedSafeProposalPayload = {
+  version: 1;
+  chainId: number;
+  safeAddress: Address;
+  safeTxHash: Hex;
+  title?: string;
+  description?: string | null;
+  tx: {
+    to: Address;
+    value: string;
+    data: Hex;
+    operation: SafeOperation;
+    safeTxGas: string;
+    baseGas: string;
+    gasPrice: string;
+    gasToken: Address;
+    refundReceiver: Address;
+    nonce: string;
+  };
+  signatures: SafeProposalSignature[];
+};

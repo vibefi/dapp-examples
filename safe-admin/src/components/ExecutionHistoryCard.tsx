@@ -11,7 +11,6 @@ import {
   formatTimestamp,
   formatTokenAmount,
   formatTokenLabel,
-  shortAddress,
 } from "../utils/format";
 
 type ExecutionHistoryCardProps = {
@@ -24,6 +23,8 @@ type ExecutionHistoryCardProps = {
   activeSafeAddress: Address | null;
   hasMoreHistory: boolean;
   onFetchMoreHistory: () => void;
+  formatAddressShort: (address: Address) => string;
+  formatAddressFull: (address: Address) => string;
 };
 
 export function ExecutionHistoryCard({
@@ -36,6 +37,8 @@ export function ExecutionHistoryCard({
   activeSafeAddress,
   hasMoreHistory,
   onFetchMoreHistory,
+  formatAddressShort,
+  formatAddressFull,
 }: ExecutionHistoryCardProps) {
   const [expandedLogsByTxHash, setExpandedLogsByTxHash] = useState<Record<string, boolean>>({});
 
@@ -97,7 +100,7 @@ export function ExecutionHistoryCard({
                   <div>Payment</div>
                   <div>{formatEtherDisplay(item.paymentWei)} ETH</div>
                   <div>To</div>
-                  <div>{decoded?.to ?? "unavailable"}</div>
+                  <div>{decoded ? formatAddressFull(decoded.to) : "unavailable"}</div>
                   <div>Value</div>
                   <div>{decoded ? `${formatEtherDisplay(decoded.value)} ETH` : "unavailable"}</div>
                   <div>Operation</div>
@@ -105,10 +108,12 @@ export function ExecutionHistoryCard({
                 </div>
 
                 {item.targetContractToken ? (
-                  <p className="infoLine">Target contract token: {formatTokenLabel(item.targetContractToken)}</p>
+                  <p className="infoLine">Target contract token: {formatTokenLabel(item.targetContractToken, formatAddressShort)}</p>
                 ) : null}
 
-                {item.decodedErc20Call ? <p className="infoLine">ERC20 call: {formatErc20Call(item.decodedErc20Call)}</p> : null}
+                {item.decodedErc20Call ? (
+                  <p className="infoLine">ERC20 call: {formatErc20Call(item.decodedErc20Call, formatAddressShort)}</p>
+                ) : null}
 
                 {item.erc20Transfers.length > 0 ? (
                   <>
@@ -116,8 +121,8 @@ export function ExecutionHistoryCard({
                     <ul className="list compactList">
                       {item.erc20Transfers.map((transfer, index) => (
                         <li key={`${item.transactionHash}-transfer-${index}`}>
-                          {formatTokenAmount(transfer.amount, transfer.token)} of {formatTokenLabel(transfer.token)} from{" "}
-                          {shortAddress(transfer.from)} to {shortAddress(transfer.to)}
+                          {formatTokenAmount(transfer.amount, transfer.token)} of {formatTokenLabel(transfer.token, formatAddressShort)}
+                          {" "}from {formatAddressShort(transfer.from)} to {formatAddressShort(transfer.to)}
                         </li>
                       ))}
                     </ul>
@@ -139,7 +144,7 @@ export function ExecutionHistoryCard({
                             <div>Index</div>
                             <div>{log.logIndex}</div>
                             <div>Emitter</div>
-                            <div>{log.address}</div>
+                            <div>{formatAddressFull(log.address)}</div>
                             <div>Decoded</div>
                             <div>{log.decodedEvent ?? "un-decoded"}</div>
                             <div>Topics</div>

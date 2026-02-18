@@ -159,6 +159,26 @@ body {
   background: var(--accent);
 }
 
+.navTab {
+  width: 100%;
+  min-height: 0;
+  background: transparent;
+  border-color: transparent;
+  color: #b4c0d0;
+  font-weight: 500;
+  justify-content: flex-start;
+  text-align: left;
+}
+
+.navTab:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.navTab:focus-visible {
+  outline: 1px solid #4e6784;
+  outline-offset: 1px;
+}
+
 .sidebarInfo {
   margin-top: auto;
   border-top: 1px solid var(--border);
@@ -312,6 +332,41 @@ input:focus {
   box-shadow: 0 0 0 1px rgba(141, 173, 209, 0.35);
 }
 
+select {
+  min-width: 0;
+  min-height: 38px;
+  border: 1px solid #34465b;
+  border-radius: 10px;
+  padding: 8px 10px;
+  font-size: 0.9rem;
+  color: var(--text);
+  background: #0c131c;
+  outline: none;
+}
+
+select:focus {
+  border-color: #4e6784;
+  box-shadow: 0 0 0 1px rgba(141, 173, 209, 0.35);
+}
+
+textarea {
+  min-width: 0;
+  min-height: 120px;
+  border: 1px solid #34465b;
+  border-radius: 10px;
+  padding: 8px 10px;
+  font-size: 0.88rem;
+  color: var(--text);
+  background: #0c131c;
+  outline: none;
+  resize: vertical;
+}
+
+textarea:focus {
+  border-color: #4e6784;
+  box-shadow: 0 0 0 1px rgba(141, 173, 209, 0.35);
+}
+
 button {
   min-height: 38px;
   border: 1px solid transparent;
@@ -381,7 +436,8 @@ button.secondary:hover:not(:disabled) {
 }
 
 .tokenBalanceList,
-.historyList {
+.historyList,
+.addressBookList {
   list-style: none;
   margin: 10px 0 0;
   padding: 0;
@@ -439,6 +495,94 @@ button.secondary:hover:not(:disabled) {
   background: linear-gradient(180deg, #141d28, #121a24);
 }
 
+.addressBookForm {
+  margin-top: 8px;
+}
+
+.addressBookList {
+  display: grid;
+  gap: 8px;
+}
+
+.addressBookItem {
+  border: 1px solid #304154;
+  border-radius: 10px;
+  padding: 10px;
+  background: rgba(255, 255, 255, 0.015);
+  display: grid;
+  gap: 5px;
+}
+
+.addressBookName {
+  color: #e6edf7;
+  font-size: 0.88rem;
+  font-weight: 700;
+}
+
+.addressBookAddress {
+  color: var(--muted);
+  font-size: 0.81rem;
+  overflow-wrap: anywhere;
+}
+
+.addressBookRemove {
+  width: fit-content;
+  min-height: 34px;
+  padding: 6px 10px;
+}
+
+.settingsGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.settingsForm {
+  margin-top: 8px;
+}
+
+.settingsProposalList {
+  list-style: none;
+  margin: 10px 0 0;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+}
+
+.settingsProposalItem {
+  border: 1px solid #2d3c4f;
+  border-radius: 12px;
+  padding: 10px;
+  background: linear-gradient(180deg, #141d28, #121a24);
+}
+
+.settingsProposalHeader {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.settingsRemoveButton {
+  margin-top: 10px;
+}
+
+.tokenTransferCard {
+  padding: 12px;
+}
+
+.importTextarea {
+  width: 100%;
+  font-family: "Avenir Next", "Segoe UI", sans-serif;
+}
+
+.proposalActions {
+  margin-top: 10px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
 .historyTitle {
   font-family: "Space Grotesk", "Avenir Next", "Segoe UI", sans-serif;
   font-weight: 700;
@@ -492,6 +636,10 @@ button.secondary:hover:not(:disabled) {
 
 @media (max-width: 1100px) {
   .grid {
+    grid-template-columns: 1fr;
+  }
+
+  .settingsGrid {
     grid-template-columns: 1fr;
   }
 
