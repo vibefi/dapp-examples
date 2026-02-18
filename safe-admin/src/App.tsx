@@ -1,4 +1,4 @@
-import { type FormEvent, useEffect, useMemo, useState } from "react";
+import { type FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { getAddress, isAddress, zeroAddress, type Address, type Hex } from "viem";
 import { useAccount, useConnect, usePublicClient } from "wagmi";
 import { injected } from "wagmi/connectors";
@@ -51,13 +51,16 @@ export default function App() {
   const [historyStartBlock, setHistoryStartBlock] = useState<bigint | null>(null);
   const [historyEndBlock, setHistoryEndBlock] = useState<bigint | null>(null);
   const [hasMoreHistory, setHasMoreHistory] = useState(false);
-  const [loading, setLoading] = useState(false);
+  const [loadingOverview, setLoadingOverview] = useState(false);
+  const [loadingHistory, setLoadingHistory] = useState(false);
   const [loadingMoreHistory, setLoadingMoreHistory] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [historyError, setHistoryError] = useState<string | null>(null);
   const [newTxNotice, setNewTxNotice] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<WorkspaceTab>("home");
   const [addressBookEntries, setAddressBookEntries] = useState<AddressBookEntry[]>(() => loadAddressBookEntries());
   const [proposals, setProposals] = useState<SafeProposedTransaction[]>(() => loadSafeProposals());
+  const latestLoadRequestId = useRef(0);
 
   const {
     customTokenInput,
@@ -137,44 +140,64 @@ export default function App() {
     }
 
     const safeAddress = getAddress(trimmed) as Address;
+    const requestId = ++latestLoadRequestId.current;
+    const stale = () => latestLoadRequestId.current !== requestId;
+
     setSafeInput(safeAddress);
     setError(null);
-    setLoading(true);
+    setHistoryError(null);
+    setLoadingOverview(true);
+    setLoadingHistory(true);
+    setOverview(null);
+    setHistory([]);
+    setActiveSafeAddress(null);
+    setHistoryStartBlock(null);
+    setHistoryEndBlock(null);
+    setHasMoreHistory(false);
     resetDetectedBalances();
 
     try {
-      const validSafe = await isSafeContract(publicClient, safeAddress);
-      if (!validSafe) {
-        throw new Error("Address is not a compatible Safe contract on the configured chain.");
-      }
+      const [validSafe, latestBlock] = await Promise.all([
+        isSafeContract(publicClient, safeAddress),
+        publicClient.getBlockNumber(),
+      ]);
+      if (stale()) return;
+      if (!validSafe) throw new Error("Address is not a compatible Safe contract on the configured chain.");
 
-      const latestBlock = await publicClient.getBlockNumber();
       const windowOffset = DEFAULT_HISTORY_LOOKBACK_BLOCKS - 1n;
       const fromBlock = latestBlock > windowOffset ? latestBlock - windowOffset : 0n;
 
-      const [nextOverview, initialHistory] = await Promise.all([
-        loadSafeOverview(publicClient, safeAddress),
-        loadSafeExecutionHistory(publicClient, safeAddress, { fromBlock, toBlock: latestBlock }),
-      ]);
-
-      setOverview(nextOverview);
-      setHistory(sortHistory(initialHistory));
       setActiveSafeAddress(safeAddress);
       setHistoryStartBlock(fromBlock);
       setHistoryEndBlock(latestBlock);
       setHasMoreHistory(fromBlock > 0n);
+
+      // Await overview before starting history so its RPC calls reach the node first.
+      // The RPC layer serializes requests, so firing both together buries the fast overview
+      // calls behind 25 slow getLogs requests.
+      const nextOverview = await loadSafeOverview(publicClient, safeAddress);
+      if (stale()) return;
+      setOverview(nextOverview);
+      setLoadingOverview(false);
       resetDetectedBalances();
-    } catch (nextError) {
-      setOverview(null);
-      setHistory([]);
-      setActiveSafeAddress(null);
-      setHistoryStartBlock(null);
-      setHistoryEndBlock(null);
-      setHasMoreHistory(false);
-      setError(nextError instanceof Error ? nextError.message : "Failed to load Safe data.");
-      resetDetectedBalances();
-    } finally {
-      setLoading(false);
+
+      void loadSafeExecutionHistory(publicClient, safeAddress, { fromBlock, toBlock: latestBlock })
+        .then((initialHistory) => {
+          if (stale()) return;
+          setHistory(sortHistory(initialHistory));
+        })
+        .catch((err) => {
+          if (stale()) return;
+          setHistoryError(err instanceof Error ? err.message : "Failed to load execution history.");
+        })
+        .finally(() => {
+          if (!stale()) setLoadingHistory(false);
+        });
+    } catch (err) {
+      if (stale()) return;
+      setError(err instanceof Error ? err.message : "Failed to load Safe data.");
+      setLoadingOverview(false);
+      setLoadingHistory(false);
     }
   }
 
@@ -187,7 +210,7 @@ export default function App() {
     if (!publicClient) return;
 
     setLoadingMoreHistory(true);
-    setError(null);
+    setHistoryError(null);
 
     try {
       const nextToBlock = historyStartBlock - 1n;
@@ -203,14 +226,15 @@ export default function App() {
       setHistoryStartBlock(nextFromBlock);
       setHasMoreHistory(nextFromBlock > 0n);
     } catch (nextError) {
-      setError(nextError instanceof Error ? nextError.message : "Failed to fetch older history window.");
+      setHistoryError(nextError instanceof Error ? nextError.message : "Failed to fetch older history window.");
     } finally {
       setLoadingMoreHistory(false);
     }
   }
 
   function onNewTransactionClick() {
-    setNewTxNotice("New transaction flow is not implemented yet.");
+    setActiveTab("assets");
+    setNewTxNotice(null);
   }
 
   function onConnectWalletClick() {
@@ -498,14 +522,14 @@ export default function App() {
             <section className="card loadCard">
               <div className="sectionHead">
                 <h2>Load Safe</h2>
-                <span className="chip">{loading ? "Loading data..." : "Ready"}</span>
+                <span className="chip">{loadingOverview || loadingHistory ? "Loading data..." : "Ready"}</span>
               </div>
               <form onSubmit={onLoad} className="form">
                 <label htmlFor="safeAddress">Safe Address</label>
                 <div className="row">
                   <input id="safeAddress" value={safeInput} onChange={(event) => setSafeInput(event.target.value)} placeholder="0x..." autoComplete="off" spellCheck={false} />
-                  <button type="submit" disabled={loading}>
-                    {loading ? "Loading..." : "Load"}
+                  <button type="submit" disabled={loadingOverview}>
+                    {loadingOverview ? "Loading..." : "Load"}
                   </button>
                 </div>
               </form>
@@ -583,10 +607,11 @@ export default function App() {
               history={history}
               historyStartBlock={historyStartBlock}
               historyEndBlock={historyEndBlock}
-              loading={loading}
+              loadingHistory={loadingHistory}
               loadingMoreHistory={loadingMoreHistory}
               activeSafeAddress={activeSafeAddress}
               hasMoreHistory={hasMoreHistory}
+              historyError={historyError}
               onFetchMoreHistory={() => void onFetchMoreHistory()}
               formatAddressShort={formatAddressShort}
               formatAddressFull={formatAddressFull}

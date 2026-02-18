@@ -18,10 +18,11 @@ type ExecutionHistoryCardProps = {
   history: SafeExecutionHistoryItem[];
   historyStartBlock: bigint | null;
   historyEndBlock: bigint | null;
-  loading: boolean;
+  loadingHistory: boolean;
   loadingMoreHistory: boolean;
   activeSafeAddress: Address | null;
   hasMoreHistory: boolean;
+  historyError: string | null;
   onFetchMoreHistory: () => void;
   formatAddressShort: (address: Address) => string;
   formatAddressFull: (address: Address) => string;
@@ -32,10 +33,11 @@ export function ExecutionHistoryCard({
   history,
   historyStartBlock,
   historyEndBlock,
-  loading,
+  loadingHistory,
   loadingMoreHistory,
   activeSafeAddress,
   hasMoreHistory,
+  historyError,
   onFetchMoreHistory,
   formatAddressShort,
   formatAddressFull,
@@ -69,15 +71,19 @@ export function ExecutionHistoryCard({
             type="button"
             className="secondary"
             onClick={onFetchMoreHistory}
-            disabled={loading || loadingMoreHistory || !activeSafeAddress || !hasMoreHistory}
+            disabled={loadingHistory || loadingMoreHistory || !activeSafeAddress || !hasMoreHistory}
           >
             {loadingMoreHistory ? "Fetching previous..." : hasMoreHistory ? "Fetch previous 250k blocks" : "Reached genesis"}
           </button>
         </div>
       ) : null}
 
+      {overviewLoaded && historyError ? <p className="error">{historyError}</p> : null}
+
       {!overviewLoaded ? (
         <p className="muted">History appears after loading a Safe.</p>
+      ) : loadingHistory ? (
+        <p className="muted">Loading execution history...</p>
       ) : history.length === 0 ? (
         <p className="muted">No executions found in the current block window.</p>
       ) : (
