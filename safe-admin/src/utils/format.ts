@@ -42,11 +42,11 @@ export function shortAddress(value: Address): string {
   return `${value.slice(0, 6)}...${value.slice(-4)}`;
 }
 
-export function formatTokenLabel(token: TokenMetadata | null): string {
+export function formatTokenLabel(token: TokenMetadata | null, formatAddress: (address: Address) => string = shortAddress): string {
   if (!token) return "Unknown token";
   if (token.symbol) return token.symbol;
   if (token.name) return token.name;
-  return shortAddress(token.address);
+  return formatAddress(token.address);
 }
 
 export function isInfiniteLikeUint256(value: bigint): boolean {
@@ -90,12 +90,12 @@ export function formatTokenAmount(amount: bigint, token: TokenMetadata | null): 
   return amount.toString();
 }
 
-export function formatErc20Call(call: DecodedErc20Call): string {
+export function formatErc20Call(call: DecodedErc20Call, formatAddress: (address: Address) => string = shortAddress): string {
   if (call.method === "transfer") {
-    return `transfer ${formatTokenAmount(call.amount, call.token)} to ${shortAddress(call.to)}`;
+    return `transfer ${formatTokenAmount(call.amount, call.token)} to ${formatAddress(call.to)}`;
   }
   if (call.method === "transferFrom") {
-    return `transferFrom ${shortAddress(call.from)} -> ${shortAddress(call.to)} amount ${formatTokenAmount(call.amount, call.token)}`;
+    return `transferFrom ${formatAddress(call.from)} -> ${formatAddress(call.to)} amount ${formatTokenAmount(call.amount, call.token)}`;
   }
-  return `approve ${shortAddress(call.spender)} amount ${formatTokenAmount(call.amount, call.token)}`;
+  return `approve ${formatAddress(call.spender)} amount ${formatTokenAmount(call.amount, call.token)}`;
 }

@@ -13,16 +13,18 @@ import type {
   DecodedErc20Call,
   DecodedErc20TransferLog,
   DecodedExecTransaction,
+  SafeOperation,
   SafeExecutionLog,
   SafeExecutionHistoryItem,
   SafeHistoryQuery,
   SafeOverview,
+  SafeTransactionPayload,
   TokenMetadata,
 } from "./types";
 import { asNullableDecimals, asNullableString } from "./utils/format";
 
 const ZERO_BYTES32 = "0x0000000000000000000000000000000000000000000000000000000000000000" as const;
-const DEFAULT_LOG_CHUNK_SIZE = 50_000n;
+const DEFAULT_LOG_CHUNK_SIZE = 10_000n;
 export const DEFAULT_HISTORY_LOOKBACK_BLOCKS = 250_000n;
 
 type TokenMetadataCache = Map<Address, Promise<TokenMetadata | null>>;
@@ -469,15 +471,15 @@ async function getExecutionSuccessLogsChunked(
   fromBlock: bigint,
   toBlock: bigint,
 ): Promise<ExecutionSuccessLog[]> {
-  const logs: ExecutionSuccessLog[] = [];
+  const chunks: Promise<ExecutionSuccessLog[]>[] = [];
 
   for (let cursor = fromBlock; cursor <= toBlock; cursor += DEFAULT_LOG_CHUNK_SIZE + 1n) {
     const chunkTo = cursor + DEFAULT_LOG_CHUNK_SIZE > toBlock ? toBlock : cursor + DEFAULT_LOG_CHUNK_SIZE;
-    const chunkLogs = await getExecutionSuccessLogsRange(client, safeAddress, cursor, chunkTo);
-    logs.push(...chunkLogs);
+    chunks.push(getExecutionSuccessLogsRange(client, safeAddress, cursor, chunkTo));
   }
 
-  return logs;
+  const results = await Promise.all(chunks);
+  return results.flat();
 }
 
 export async function loadSafeExecutionHistory(
@@ -504,13 +506,18 @@ export async function loadSafeExecutionHistory(
 
   const cappedLogs = typeof query.limit === "number" && query.limit > 0 ? sortedLogs.slice(0, query.limit) : sortedLogs;
   const tokenCache: TokenMetadataCache = new Map();
+  const blockCache = new Map<bigint, ReturnType<typeof client.getBlock>>();
+  const getBlock = (n: bigint) => {
+    if (!blockCache.has(n)) blockCache.set(n, client.getBlock({ blockNumber: n }));
+    return blockCache.get(n)!;
+  };
 
   const settled = await Promise.allSettled(
     cappedLogs.map(async (log) => {
       const transactionHash = log.transactionHash as Hex;
       const [transaction, block, receipt] = await Promise.all([
         client.getTransaction({ hash: transactionHash }),
-        client.getBlock({ blockNumber: log.blockNumber as bigint }),
+        getBlock(log.blockNumber as bigint),
         client.getTransactionReceipt({ hash: transactionHash }),
       ]);
 
@@ -547,4 +554,43 @@ export async function loadSafeExecutionHistory(
   );
 
   return settled.flatMap((item) => (item.status === "fulfilled" ? [item.value] : []));
+}
+
+export type SafeTransactionHashRequest = {
+  to: Address;
+  value: bigint;
+  data: Hex;
+  operation: SafeOperation;
+  safeTxGas: bigint;
+  baseGas: bigint;
+  gasPrice: bigint;
+  gasToken: Address;
+  refundReceiver: Address;
+  nonce: bigint;
+};
+
+export async function getSafeTransactionHash(
+  client: PublicClient,
+  safeAddressInput: string,
+  tx: SafeTransactionHashRequest | SafeTransactionPayload,
+): Promise<Hex> {
+  const safeAddress = asSafeAddress(safeAddressInput);
+  const hash = (await client.readContract({
+    address: safeAddress,
+    abi: ABI.safe,
+    functionName: "getTransactionHash",
+    args: [
+      tx.to,
+      tx.value,
+      tx.data,
+      tx.operation,
+      tx.safeTxGas,
+      tx.baseGas,
+      tx.gasPrice,
+      tx.gasToken,
+      tx.refundReceiver,
+      tx.nonce,
+    ],
+  })) as Hex;
+  return hash;
 }

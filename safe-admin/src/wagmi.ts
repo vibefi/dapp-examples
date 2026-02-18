@@ -1,21 +1,23 @@
-import { createConfig, custom } from "wagmi";
+import { createConfig, custom, http } from "wagmi";
 import { mainnet } from "wagmi/chains";
 import { injected } from "wagmi/connectors";
+import { getRpcUrl } from "./env";
 
 type EIP1193Provider = {
   request(args: { method: string; params?: unknown[] }): Promise<unknown>;
 };
 
-function getInjectedProvider(): EIP1193Provider {
+function getTransport() {
   const eth = (window as unknown as { ethereum?: EIP1193Provider }).ethereum;
-  if (!eth) throw new Error("No injected provider found (window.ethereum). This app must run inside a Safe browser context.");
-  return eth;
+  if (eth) return custom(eth);
+  const rpcUrl = getRpcUrl();
+  return rpcUrl ? http(rpcUrl) : http();
 }
 
 export const wagmiConfig = createConfig({
   chains: [mainnet],
   connectors: [injected()],
   transports: {
-    [mainnet.id]: custom(getInjectedProvider()),
+    [mainnet.id]: getTransport(),
   },
 });
