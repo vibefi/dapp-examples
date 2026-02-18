@@ -124,8 +124,7 @@ Build a new dapp example in `dapp-examples/safe-admin` that can administer and e
 9. `dapp-examples/safe-admin/src/hooks/useSmartLink.ts`
 10. `dapp-examples/safe-admin/src/components/*`
 11. `dapp-examples/safe-admin/abis/Safe.json`
-12. `dapp-examples/safe-admin/addresses.json`
-13. `dapp-examples/safe-admin/manifest.json`
+12. `dapp-examples/safe-admin/vibefi.json`
 
 ## 11. Delivery Phases
 1. Phase 1: Read-only safe load + overview + history.
