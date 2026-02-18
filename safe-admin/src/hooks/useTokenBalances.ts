@@ -41,7 +41,7 @@ export function useTokenBalances(activeSafeAddress: Address | null, activeChainI
   const knownMetadataAddressesRef = useRef(new Set<string>());
   const metadataInFlightRef = useRef(new Set<string>());
 
-  const client = usePublicClient();
+  const client = usePublicClient({ chainId: activeChainId ?? undefined });
 
   const customTrackedTokenSet = useMemo(() => {
     return new Set(customTrackedTokens.map((t) => t.toLowerCase()));
