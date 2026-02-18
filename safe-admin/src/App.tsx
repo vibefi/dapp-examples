@@ -7,7 +7,7 @@ import { ExecutionHistoryCard } from "./components/ExecutionHistoryCard";
 import { ProposedTransactionsCard } from "./components/ProposedTransactionsCard";
 import { SettingsCard } from "./components/SettingsCard";
 import { TokenBalancesCard } from "./components/TokenBalancesCard";
-import { getConfiguredChainId, getRpcUrl } from "./env";
+import { getRpcUrl } from "./env";
 import { useTokenBalances } from "./hooks/useTokenBalances";
 import { DEFAULT_HISTORY_LOOKBACK_BLOCKS, getSafeTransactionHash, isSafeContract, loadSafeExecutionHistory, loadSafeOverview } from "./safe";
 import type {
@@ -31,14 +31,27 @@ import {
 } from "./utils/proposals";
 
 type WorkspaceTab = "home" | "assets" | "transactions" | "proposals" | "address-book" | "settings" | "apps";
+const SUPPORTED_CHAIN_IDS = new Set<number>([1, 11155111]);
+const CHAIN_LABELS: Record<number, string> = {
+  1: "Ethereum Mainnet",
+  11155111: "Sepolia",
+};
+
+function formatChainLabel(chainId: number | null | undefined): string {
+  if (chainId === null || chainId === undefined) return "unknown";
+  const name = CHAIN_LABELS[chainId];
+  return name ? `${name} (${chainId})` : `${chainId}`;
+}
 
 export default function App() {
-  const configuredChainId = getConfiguredChainId();
   const rpcUrl = getRpcUrl();
 
   const { address: walletAccount, chainId: walletChainId, isConnected } = useAccount();
   const { connect, isPending: isConnecting, error: connectError } = useConnect();
-  const publicClient = usePublicClient();
+  const publicClient = usePublicClient({ chainId: walletChainId });
+  const activeChainId = walletChainId ?? null;
+  const activeChainSupported = activeChainId !== null && SUPPORTED_CHAIN_IDS.has(activeChainId);
+  const previousActiveChainId = useRef<number | null>(activeChainId ?? null);
 
   const [safeInput, setSafeInput] = useState(() => {
     const params = new URLSearchParams(window.location.search);
@@ -73,12 +86,7 @@ export default function App() {
     checkedTokenCount,
     addCustomTokenFromInput,
     resetDetectedBalances,
-  } = useTokenBalances(activeSafeAddress);
-
-  const chainMismatch = useMemo(() => {
-    if (!isConnected || walletChainId === undefined) return false;
-    return walletChainId !== configuredChainId;
-  }, [walletChainId, configuredChainId, isConnected]);
+  } = useTokenBalances(activeSafeAddress, activeChainId ?? null);
 
   const walletIsSignerForLoadedSafe = useMemo(() => {
     if (!overview || !walletAccount || !isConnected) return false;
@@ -87,10 +95,13 @@ export default function App() {
 
   const signerActionGateReason = useMemo(() => {
     if (!overview) return "Load a Safe on Home first.";
+    if (activeChainId === null) return "No active provider chain detected.";
+    if (!activeChainSupported) return "Switch to Ethereum Mainnet (1) or Sepolia (11155111).";
+    if (overview.chainId !== activeChainId) return "Loaded Safe is from a different chain. Reload it on the active chain.";
     if (!isConnected || !walletAccount) return "Connect a signer wallet to continue.";
     if (!walletIsSignerForLoadedSafe) return "Connected wallet is not a signer for the loaded Safe.";
     return null;
-  }, [overview, isConnected, walletAccount, walletIsSignerForLoadedSafe]);
+  }, [overview, activeChainId, activeChainSupported, isConnected, walletAccount, walletIsSignerForLoadedSafe]);
 
   const addressBookNamesByAddress = useMemo(() => {
     return new Map(addressBookEntries.map((entry) => [entry.address.toLowerCase(), entry.name]));
@@ -129,6 +140,16 @@ export default function App() {
     event.preventDefault();
     const trimmed = safeInput.trim();
 
+    if (activeChainId === null) {
+      setError("No active provider chain detected.");
+      return;
+    }
+
+    if (!activeChainSupported) {
+      setError(`Unsupported chain ${activeChainId}. Switch to Ethereum Mainnet (1) or Sepolia (11155111).`);
+      return;
+    }
+
     if (!isAddress(trimmed)) {
       setError("Enter a valid Safe address.");
       return;
@@ -162,7 +183,7 @@ export default function App() {
         publicClient.getBlockNumber(),
       ]);
       if (stale()) return;
-      if (!validSafe) throw new Error("Address is not a compatible Safe contract on the configured chain.");
+      if (!validSafe) throw new Error(`Address is not a compatible Safe contract on active chain ${activeChainId}.`);
 
       const windowOffset = DEFAULT_HISTORY_LOOKBACK_BLOCKS - 1n;
       const fromBlock = latestBlock > windowOffset ? latestBlock - windowOffset : 0n;
@@ -250,6 +271,9 @@ export default function App() {
     operation: 0 | 1;
   }) {
     if (!overview) throw new Error("Load a Safe on Home before creating proposals.");
+    if (activeChainId === null) throw new Error("No active provider chain detected.");
+    if (!activeChainSupported) throw new Error("Switch to Ethereum Mainnet (1) or Sepolia (11155111).");
+    if (overview.chainId !== activeChainId) throw new Error("Loaded Safe is from a different chain. Reload it on the active chain.");
     if (!publicClient) throw new Error("No public client available.");
     if (!isConnected || !walletAccount) throw new Error("Connect a signer wallet before creating proposals.");
     if (!walletIsSignerForLoadedSafe) throw new Error("Connected wallet is not a signer for the loaded Safe.");
@@ -432,6 +456,27 @@ export default function App() {
   }, [newTxNotice]);
 
   useEffect(() => {
+    const previous = previousActiveChainId.current;
+    const current = activeChainId ?? null;
+    if (previous === current) return;
+    previousActiveChainId.current = current;
+
+    latestLoadRequestId.current += 1;
+    setOverview(null);
+    setHistory([]);
+    setActiveSafeAddress(null);
+    setHistoryStartBlock(null);
+    setHistoryEndBlock(null);
+    setHasMoreHistory(false);
+    setLoadingOverview(false);
+    setLoadingHistory(false);
+    setLoadingMoreHistory(false);
+    setError(null);
+    setHistoryError(null);
+    setNewTxNotice(`Active chain changed to ${formatChainLabel(current)}. Reload Safe data for this chain.`);
+  }, [activeChainId]);
+
+  useEffect(() => {
     saveAddressBookEntries(addressBookEntries);
   }, [addressBookEntries]);
 
@@ -488,8 +533,8 @@ export default function App() {
             </button>
           </nav>
           <div className="sidebarInfo">
-            <p>Configured chain: {configuredChainId}</p>
-            <p>Wallet chain: {walletChainId ?? "unknown"}</p>
+            <p>Active chain: {formatChainLabel(activeChainId)}</p>
+            <p>Wallet chain: {formatChainLabel(walletChainId)}</p>
             <p>RPC: {rpcUrl ? "configured" : "fallback provider"}</p>
           </div>
         </aside>
@@ -502,7 +547,7 @@ export default function App() {
             </div>
             <div className="topbarBadges">
               <span className="badge">Wallet: {walletAccount ? formatAddressFull(walletAccount) : "not connected"}</span>
-              <span className="badge">Target chain: {configuredChainId}</span>
+              <span className="badge">Active chain: {formatChainLabel(activeChainId)}</span>
               {!isConnected ? (
                 <button type="button" className="secondary" onClick={onConnectWalletClick} disabled={isConnecting}>
                   {isConnecting ? "Connecting..." : "Connect Wallet"}
@@ -517,6 +562,10 @@ export default function App() {
             </div>
           ) : null}
           {connectError ? <p className="error">{connectError.message}</p> : null}
+          {activeChainId === null ? <p className="warn">Connect wallet to detect active chain.</p> : null}
+          {activeChainId !== null && !activeChainSupported ? (
+            <p className="warn">Unsupported chain {activeChainId}. Switch to Mainnet (1) or Sepolia (11155111).</p>
+          ) : null}
 
           {activeTab === "home" ? (
             <section className="card loadCard">
@@ -533,7 +582,6 @@ export default function App() {
                   </button>
                 </div>
               </form>
-              {chainMismatch ? <p className="warn">Wallet chain differs from configured chain.</p> : null}
               {error ? <p className="error">{error}</p> : null}
             </section>
           ) : null}
@@ -548,6 +596,8 @@ export default function App() {
                   <div className="kvs">
                     <div>Safe</div>
                     <div>{formatAddressFull(overview.safeAddress)}</div>
+                    <div>Chain</div>
+                    <div>{formatChainLabel(overview.chainId)}</div>
                     <div>Version</div>
                     <div>{overview.version ?? "unknown"}</div>
                     <div>Threshold</div>

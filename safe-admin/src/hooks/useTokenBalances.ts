@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState, type Dispatch, type SetStateActio
 import { erc20Abi, getAddress, isAddress, type Address } from "viem";
 import { usePublicClient } from "wagmi";
 import { useQuery } from "@tanstack/react-query";
-import { TOP_ERC20_TOKEN_ADDRESSES } from "../topErc20Tokens";
+import { getSeedTokenAddressesForChain } from "../topErc20Tokens";
 import type { TokenMetadata } from "../types";
 import { asNullableDecimals, asNullableString } from "../utils/format";
 
@@ -26,7 +26,7 @@ type UseTokenBalancesResult = {
   resetDetectedBalances: () => void;
 };
 
-export function useTokenBalances(activeSafeAddress: Address | null): UseTokenBalancesResult {
+export function useTokenBalances(activeSafeAddress: Address | null, activeChainId: number | null): UseTokenBalancesResult {
   const [customTokenInput, setCustomTokenInput] = useState("");
   const [customTrackedTokens, setCustomTrackedTokens] = useState<Address[]>([]);
   const [tokenBalanceError, setTokenBalanceError] = useState<string | null>(null);
@@ -47,11 +47,15 @@ export function useTokenBalances(activeSafeAddress: Address | null): UseTokenBal
     return new Set(customTrackedTokens.map((t) => t.toLowerCase()));
   }, [customTrackedTokens]);
 
+  const chainSeedTokenAddresses = useMemo(() => {
+    return getSeedTokenAddressesForChain(activeChainId);
+  }, [activeChainId]);
+
   const trackedTokenAddresses = useMemo(() => {
     const deduped: Address[] = [];
     const seen = new Set<string>();
 
-    for (const tokenAddress of TOP_ERC20_TOKEN_ADDRESSES) {
+    for (const tokenAddress of chainSeedTokenAddresses) {
       const normalized = tokenAddress.toLowerCase();
       if (seen.has(normalized)) continue;
       seen.add(normalized);
@@ -66,7 +70,7 @@ export function useTokenBalances(activeSafeAddress: Address | null): UseTokenBal
     }
 
     return deduped;
-  }, [customTrackedTokens]);
+  }, [chainSeedTokenAddresses, customTrackedTokens]);
 
   useEffect(() => {
     tokenCheckRunIdRef.current += 1;
@@ -75,11 +79,11 @@ export function useTokenBalances(activeSafeAddress: Address | null): UseTokenBal
     setLiveBalanceEntries([]);
     setMetadataMap(new Map());
     setTokenCheckProgress({ isChecking: false, checkedCount: 0, totalCount: 0 });
-  }, [activeSafeAddress]);
+  }, [activeSafeAddress, activeChainId]);
 
   // Fetch all balances via individual readContract calls (no multicall)
   const { error: balanceQueryError, status: balanceQueryStatus, fetchStatus: balanceFetchStatus } = useQuery({
-    queryKey: ["tokenBalances", activeSafeAddress, trackedTokenAddresses],
+    queryKey: ["tokenBalances", activeChainId, activeSafeAddress, trackedTokenAddresses],
     queryFn: async () => {
       if (!client || !activeSafeAddress) {
         tokenCheckRunIdRef.current += 1;
@@ -105,6 +109,7 @@ export function useTokenBalances(activeSafeAddress: Address | null): UseTokenBal
       setProgressIfCurrent({ isChecking: true, checkedCount: 0, totalCount });
 
       console.log("[useTokenBalances] queryFn fired", {
+        activeChainId,
         activeSafeAddress,
         trackedCount: trackedTokenAddresses.length,
         clientChain: client.chain?.id,
@@ -203,12 +208,13 @@ export function useTokenBalances(activeSafeAddress: Address | null): UseTokenBal
       setProgressIfCurrent({ isChecking: false, checkedCount: totalCount, totalCount });
       return null;
     },
-    enabled: !!activeSafeAddress && !!client,
+    enabled: !!activeSafeAddress && !!client && activeChainId !== null,
     refetchInterval: 5_000,
   });
 
   // Debug: log query state on every render where relevant values change
   console.log("[useTokenBalances] render", {
+    activeChainId,
     activeSafeAddress,
     clientExists: !!client,
     balanceQueryStatus,

@@ -1,5 +1,5 @@
 import { createConfig, custom, http } from "wagmi";
-import { mainnet } from "wagmi/chains";
+import { mainnet, sepolia } from "wagmi/chains";
 import { injected } from "wagmi/connectors";
 import { getRpcUrl } from "./env";
 
@@ -13,9 +13,10 @@ function getInjectedTransport() {
 }
 
 export const wagmiConfig = createConfig({
-  chains: [mainnet],
+  chains: [mainnet, sepolia],
   connectors: [injected()],
   transports: {
     [mainnet.id]: getInjectedTransport(),
+    [sepolia.id]: getInjectedTransport(),
   },
 });

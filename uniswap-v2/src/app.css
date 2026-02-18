@@ -95,7 +95,7 @@ body {
   display: inline-block;
 }
 
-.chainDot.mainnet { background: #27AE60; }
+.chainDot.supported { background: #27AE60; }
 .chainDot.other { background: #E67E22; }
 
 /* ─── Swap card interior ─── */

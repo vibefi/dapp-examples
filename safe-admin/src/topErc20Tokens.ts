@@ -1,7 +1,7 @@
 import type { Address } from "viem";
 
 // Extracted from repository root files 1.html and 2.html (Etherscan token pages).
-export const TOP_ERC20_TOKEN_ADDRESSES: readonly Address[] = [
+export const MAINNET_TOP_ERC20_TOKEN_ADDRESSES: readonly Address[] = [
   "0xdac17f958d2ee523a2206206994597c13d831ec7",
   "0xb8c77482e45f1f44de1745f52c74426c631bdd52",
   "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
@@ -203,3 +203,18 @@ export const TOP_ERC20_TOKEN_ADDRESSES: readonly Address[] = [
   "0x5086bf358635b81d8c47c66d1c8b9e567db70c72",
   "0x667102bd3413bfeaa3dffb48fa8288819e480a88",
 ] as const;
+
+export const SEPOLIA_SEED_ERC20_TOKEN_ADDRESSES: readonly Address[] = [
+  // Canonical Sepolia WETH used by Uniswap V2 Sepolia deployments.
+  "0xfff9976782d46cc05630d1f6ebab18b2324d6b14", // WETH
+  // Aave V3 Sepolia market assets.
+  "0xC82aa9a56B2Ce4D2fE6B92D2706A2B412C16b5B9", // WETH
+  "0x16dA4541aD1807f4443d92D26044C1147406EB80", // USDC
+  "0x63B4f4A8E9aFc7AaEc67f58af3B17fE59A6952D8", // DAI
+] as const;
+
+export function getSeedTokenAddressesForChain(chainId: number | null | undefined): readonly Address[] {
+  if (chainId === 1) return MAINNET_TOP_ERC20_TOKEN_ADDRESSES;
+  if (chainId === 11155111) return SEPOLIA_SEED_ERC20_TOKEN_ADDRESSES;
+  return [];
+}

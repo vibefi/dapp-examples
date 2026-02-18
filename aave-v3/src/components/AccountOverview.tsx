@@ -1,9 +1,11 @@
 import { useAccount, useReadContract } from "wagmi";
 import { AAVE } from "../aave";
-import { Card } from "./Card";
+import { SUPPORTED_CHAIN_IDS, getAddresses, type Address } from "../addresses";
 import { formatHealthFactor, formatUnits, hfColor } from "../format";
+import { Card } from "./Card";
 
 const BASE_DECIMALS = 8;
+const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000" as Address;
 
 function fmtBase(x?: bigint) {
   if (x === undefined) return "—";
@@ -11,14 +13,17 @@ function fmtBase(x?: bigint) {
 }
 
 export function AccountOverview() {
-  const { address, isConnected } = useAccount();
+  const { address, isConnected, chainId } = useAccount();
+  const addresses = getAddresses(chainId);
+  const isSupportedChain = Boolean(addresses);
+  const supportedChainHint = SUPPORTED_CHAIN_IDS.join(", ");
 
   const { data, isLoading, error } = useReadContract({
-    address: AAVE.pool.address,
+    address: (addresses?.aaveV3.pool ?? ZERO_ADDRESS) as Address,
     abi: AAVE.pool.abi,
     functionName: "getUserAccountData",
     args: address ? [address] : undefined,
-    query: { enabled: Boolean(isConnected && address) },
+    query: { enabled: Boolean(isConnected && address && isSupportedChain) },
   });
 
   type AccountDataTuple = readonly [
@@ -43,14 +48,15 @@ export function AccountOverview() {
       }
     : undefined;
 
-  console.log("account data", { data, error });
-
   const hf = d?.healthFactor ?? 0n;
   const hfClass = hfColor(hf);
 
   return (
     <Card title="Your supplies" right={<span className="pill muted">Read-only RPC</span>}>
       {!isConnected ? <div className="muted small">Connect your wallet to load account data.</div> : null}
+      {isConnected && !isSupportedChain ? (
+        <div className="bad small">Unsupported chain {chainId}. Switch wallet network to chain ID {supportedChainHint}.</div>
+      ) : null}
       {isLoading ? <div className="muted small">Loading…</div> : null}
       {error ? <div className="bad small">Error: {String((error as any).message ?? error)}</div> : null}
 
