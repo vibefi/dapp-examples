@@ -1,10 +1,16 @@
 import { WalletBar } from "./components/WalletBar";
 import { AccountOverview } from "./components/AccountOverview";
 import { AssetPanel } from "./components/AssetPanel";
+import { useAccount } from "wagmi";
+import { getAddresses, getMarketLabel } from "./addresses";
 
 const aaveLogoUrl = new URL("../assets/aave.webp", import.meta.url).href;
 
 export default function App() {
+  const { chainId } = useAccount();
+  const addresses = getAddresses(chainId);
+  const networkText = addresses?.chainLabel ?? (chainId ? `Unsupported chain (${chainId})` : "Connect wallet");
+
   return (
     <div className="appRoot">
       <header className="topNav">
@@ -20,7 +26,7 @@ export default function App() {
             <img src={aaveLogoUrl} alt="Aave" />
             <div>
               <h1>Core Instance</h1>
-              <div className="muted small">Main Ethereum market with deterministic onchain actions</div>
+              <div className="muted small">{getMarketLabel(chainId)} with deterministic onchain actions</div>
             </div>
           </div>
           <WalletBar />
@@ -29,7 +35,7 @@ export default function App() {
         <div className="summaryRow">
           <div className="summaryItem">
             <div className="small muted">Market</div>
-            <div className="summaryValue">Ethereum Mainnet</div>
+            <div className="summaryValue">{networkText}</div>
           </div>
           <div className="summaryItem">
             <div className="small muted">Protocol</div>
@@ -52,7 +58,7 @@ export default function App() {
             <li>Supplying/repaying ERC20 requires approval to the Aave Pool.</li>
             <li>ETH-native deposits/withdrawals use WrappedTokenGateway and mint/burn aWETH.</li>
             <li>Borrowing can put your position at liquidation risk (watch health factor).</li>
-            <li>This UI only includes ETH/WETH/USDC/DAI to keep it deterministic without offchain token lists.</li>
+            <li>This UI supports chain IDs 1 and 11155111 with ETH/WETH/USDC/DAI for deterministic behavior.</li>
           </ul>
         </div>
       </div>

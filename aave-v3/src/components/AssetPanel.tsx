@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   useAccount,
   useBalance,
@@ -6,35 +6,55 @@ import {
   useWriteContract,
   useWaitForTransactionReceipt,
 } from "wagmi";
+import { maxUint256 } from "viem";
 import { AAVE, RATE_MODE } from "../aave";
-import { ADDRESSES, getAsset, getAssetSymbols, isEthSymbol, type Address } from "../addresses";
+import {
+  SUPPORTED_CHAIN_IDS,
+  getAddresses,
+  getAsset,
+  getAssetSymbols,
+  isEthSymbol,
+  type Address,
+} from "../addresses";
+import { formatUnits, parseUnits } from "../format";
 import { Button } from "./Button";
 import { Card } from "./Card";
 import { Input } from "./Input";
 import { Label } from "./Label";
 import { Select } from "./Select";
-import { formatUnits, parseUnits } from "../format";
-import { maxUint256 } from "viem";
 
 type Mode = "Supply" | "Withdraw" | "Borrow" | "Repay";
 
+const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000" as Address;
+
 export function AssetPanel() {
-  const { address, isConnected } = useAccount();
-  const symbols = useMemo(() => getAssetSymbols(), []);
-  const [symbol, setSymbol] = useState(symbols.includes("ETH") ? "ETH" : (symbols[0] ?? "WETH"));
+  const { address, isConnected, chainId } = useAccount();
+  const addresses = getAddresses(chainId);
+  const isSupportedChain = Boolean(addresses);
+  const supportedChainHint = SUPPORTED_CHAIN_IDS.join(", ");
+  const symbols = useMemo(() => getAssetSymbols(chainId), [chainId]);
+  const defaultSymbol = symbols.includes("ETH") ? "ETH" : (symbols[0] ?? "WETH");
+  const [symbol, setSymbol] = useState(defaultSymbol);
   const [mode, setMode] = useState<Mode>("Supply");
   const [amountStr, setAmountStr] = useState("");
 
+  useEffect(() => {
+    if (!symbols.includes(symbol)) setSymbol(defaultSymbol);
+  }, [defaultSymbol, symbol, symbols]);
+
   const isEth = isEthSymbol(symbol);
-  const asset = getAsset(symbol); // ETH maps to WETH address for reserve data
-  const assetAddr = asset.address as Address;
-  const poolAddr = ADDRESSES.aaveV3.pool as Address;
-  const gatewayAddr = ADDRESSES.aaveV3.wrappedTokenGateway as Address;
+  const asset = getAsset(chainId, symbol);
+  const assetDecimals = asset?.decimals ?? 18;
+  const assetAddr = (asset?.address ?? ZERO_ADDRESS) as Address;
+  const poolAddr = (addresses?.aaveV3.pool ?? ZERO_ADDRESS) as Address;
+  const gatewayAddr = (addresses?.aaveV3.wrappedTokenGateway ?? ZERO_ADDRESS) as Address;
+  const dataProviderAddr = (addresses?.aaveV3.protocolDataProvider ?? ZERO_ADDRESS) as Address;
+  const readsEnabled = Boolean(isConnected && address && isSupportedChain && asset);
 
   // Native ETH balance (only used when symbol=ETH)
   const ethBal = useBalance({
-    address: address,
-    query: { enabled: Boolean(isConnected && address && isEth) },
+    address,
+    query: { enabled: Boolean(readsEnabled && isEth) },
   });
 
   // ERC20 wallet balance (used for non-ETH symbols, and for WETH specifically)
@@ -43,7 +63,7 @@ export function AssetPanel() {
     abi: AAVE.erc20.abi,
     functionName: "balanceOf",
     args: address ? [address] : undefined,
-    query: { enabled: Boolean(isConnected && address && !isEth) },
+    query: { enabled: Boolean(readsEnabled && !isEth) },
   });
 
   // Allowance to Pool (not needed for ETH-native)
@@ -52,16 +72,16 @@ export function AssetPanel() {
     abi: AAVE.erc20.abi,
     functionName: "allowance",
     args: address ? [address, poolAddr] : undefined,
-    query: { enabled: Boolean(isConnected && address && !isEth) },
+    query: { enabled: Boolean(readsEnabled && !isEth) },
   });
 
   // Aave user reserve data: for ETH, we read WETH reserve (since Aave reserve is WETH)
   const userReserve = useReadContract({
-    address: ADDRESSES.aaveV3.protocolDataProvider as Address,
+    address: dataProviderAddr,
     abi: AAVE.dataProvider.abi,
     functionName: "getUserReserveData",
     args: address ? [assetAddr, address] : undefined,
-    query: { enabled: Boolean(isConnected && address) },
+    query: { enabled: readsEnabled },
   });
 
   const reserve = userReserve.data as
@@ -85,16 +105,16 @@ export function AssetPanel() {
 
   const amount = (() => {
     try {
-      return parseUnits(amountStr || "0", asset.decimals);
+      return parseUnits(amountStr || "0", assetDecimals);
     } catch {
       return 0n;
     }
   })();
 
   const modeAllowed =
-    !isEth || (mode === "Supply" || mode === "Withdraw"); // ETH-native only supports supply/withdraw via gateway
+    isSupportedChain && (!isEth || mode === "Supply" || mode === "Withdraw"); // ETH-native only supports supply/withdraw via gateway
 
-  const needsApproval = !isEth && (mode === "Supply" || mode === "Repay");
+  const needsApproval = isSupportedChain && !isEth && (mode === "Supply" || mode === "Repay");
   const approvalOk = !needsApproval || poolAllowance >= amount;
 
   const { data: txHash, isPending, writeContract, error: writeError } = useWriteContract();
@@ -102,16 +122,16 @@ export function AssetPanel() {
 
   function setMaxForMode() {
     if (mode === "Supply" || mode === "Repay") {
-      setAmountStr(formatUnits(walletBal, asset.decimals, 6));
+      setAmountStr(formatUnits(walletBal, assetDecimals, 6));
     } else if (mode === "Withdraw") {
-      setAmountStr(formatUnits(supplied, asset.decimals, 6));
+      setAmountStr(formatUnits(supplied, assetDecimals, 6));
     } else if (mode === "Borrow") {
       setAmountStr("");
     }
   }
 
   function onApprove() {
-    if (!isConnected || !address) return;
+    if (!isConnected || !address || !isSupportedChain || !asset) return;
     if (isEth) return;
     writeContract({
       address: assetAddr,
@@ -122,7 +142,8 @@ export function AssetPanel() {
   }
 
   function onExecute() {
-    if (!isConnected || !address) return;
+    if (!isConnected || !address || !isSupportedChain || !asset) return;
+    if (!modeAllowed) throw new Error("Action unavailable for selected asset on this network.");
     if (amount <= 0n) throw new Error("Enter an amount");
 
     if (isEth) {
@@ -193,7 +214,13 @@ export function AssetPanel() {
 
   return (
     <Card title="Assets to supply or borrow">
-      <div className="two">
+      {isConnected && !isSupportedChain ? (
+        <div className="bad small topGapSm">
+          Unsupported chain {chainId}. Switch wallet network to chain ID {supportedChainHint}.
+        </div>
+      ) : null}
+
+      <div className="two topGapSm">
         <div>
           <Label>Asset</Label>
           <Select
@@ -204,6 +231,7 @@ export function AssetPanel() {
               // If ETH selected, force to allowed mode
               if (isEthSymbol(next) && (mode === "Borrow" || mode === "Repay")) setMode("Supply");
             }}
+            disabled={!isSupportedChain || symbols.length === 0}
           >
             {symbols.map((s) => (
               <option key={s} value={s}>
@@ -218,7 +246,7 @@ export function AssetPanel() {
           <Select
             value={mode}
             onChange={(e) => setMode(e.target.value as Mode)}
-            disabled={isEth}
+            disabled={isEth || !isSupportedChain}
             title={isEth ? "ETH-native supports Supply/Withdraw via WrappedTokenGateway. Use WETH for Borrow/Repay." : ""}
           >
             <option>Supply</option>
@@ -234,12 +262,13 @@ export function AssetPanel() {
         <Label>Amount</Label>
         <div className="two">
           <Input
-            placeholder={`e.g. 0.1`}
+            placeholder="e.g. 0.1"
             value={amountStr}
             onChange={(e) => setAmountStr(e.target.value)}
             inputMode="decimal"
+            disabled={!isSupportedChain}
           />
-          <Button onClick={setMaxForMode} disabled={!isConnected}>
+          <Button onClick={setMaxForMode} disabled={!isConnected || !isSupportedChain}>
             Max
           </Button>
         </div>
@@ -251,14 +280,14 @@ export function AssetPanel() {
         <div className="item">
           <div className="label">Wallet balance</div>
           <div className="value">
-            {formatUnits(walletBal, asset.decimals, 6)} {symbol}
+            {formatUnits(walletBal, assetDecimals, 6)} {symbol}
           </div>
         </div>
 
         <div className="item">
           <div className="label">Pool allowance</div>
           <div className="value">
-            {isEth ? "—" : `${formatUnits(poolAllowance, asset.decimals, 6)} ${symbol}`}
+            {isEth ? "—" : `${formatUnits(poolAllowance, assetDecimals, 6)} ${symbol}`}
           </div>
           {isEth ? <div className="small muted">Not needed for ETH-native.</div> : null}
         </div>
@@ -266,7 +295,7 @@ export function AssetPanel() {
         <div className="item">
           <div className="label">Supplied (aToken balance)</div>
           <div className="value">
-            {formatUnits(supplied, asset.decimals, 6)} {isEth ? "aWETH" : `a${symbol}`}
+            {formatUnits(supplied, assetDecimals, 6)} {isEth ? "aWETH" : `a${symbol}`}
           </div>
           {isEth ? <div className="small muted">ETH deposits mint aWETH.</div> : null}
         </div>
@@ -274,7 +303,7 @@ export function AssetPanel() {
         <div className="item">
           <div className="label">Variable debt</div>
           <div className="value">
-            {formatUnits(variableDebt, asset.decimals, 6)} {isEth ? "WETH" : symbol}
+            {formatUnits(variableDebt, assetDecimals, 6)} {isEth ? "WETH" : symbol}
           </div>
         </div>
       </div>
@@ -282,31 +311,32 @@ export function AssetPanel() {
       <div className="hr" />
 
       <div className="actions">
-        {!modeAllowed ? (
+        {!modeAllowed && isSupportedChain ? (
           <div className="bad small">This action isn't available for ETH-native. Switch to WETH.</div>
         ) : null}
 
         {needsApproval ? (
           <div className="two">
-            <Button variant="default" onClick={onApprove} disabled={!isConnected || isPending} title="Approve max allowance for the Aave Pool">
+            <Button
+              variant="default"
+              onClick={onApprove}
+              disabled={!isConnected || !isSupportedChain || isPending}
+              title="Approve max allowance for the Aave Pool"
+            >
               Approve
             </Button>
 
             <Button
               variant="primary"
               onClick={onExecute}
-              disabled={!isConnected || isPending || (needsApproval && !approvalOk)}
+              disabled={!isConnected || !isSupportedChain || isPending || !modeAllowed || (needsApproval && !approvalOk)}
               title={!approvalOk ? "Approve first (or lower amount)" : "Send transaction"}
             >
               Execute
             </Button>
           </div>
         ) : (
-          <Button
-            variant="primary"
-            onClick={onExecute}
-            disabled={!isConnected || isPending || !modeAllowed}
-          >
+          <Button variant="primary" onClick={onExecute} disabled={!isConnected || !isSupportedChain || isPending || !modeAllowed}>
             Execute
           </Button>
         )}
@@ -332,8 +362,8 @@ export function AssetPanel() {
 
         {isEth ? (
           <div className="small muted">
-            ETH-native actions use <span className="inlineStrong">WrappedTokenGateway</span>:
-            depositETH (payable) and withdrawETH. Use WETH if you want Borrow/Repay.
+            ETH-native actions use <span className="inlineStrong">WrappedTokenGateway</span>: depositETH (payable) and
+            withdrawETH. Use WETH if you want Borrow/Repay.
           </div>
         ) : null}
       </div>

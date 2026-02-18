@@ -11,9 +11,16 @@ import {
   useWriteContract,
 } from "wagmi";
 import { injected } from "wagmi/connectors";
-import { mainnet } from "wagmi/chains";
+import { mainnet, sepolia } from "wagmi/chains";
 import { ABI } from "./abis";
-import { addresses, MAINNET_CHAIN_ID } from "./addresses";
+import {
+  getAddresses,
+  getChainName,
+  getSupportedChainText,
+  isSupportedChainId,
+  type Addresses,
+  type SupportedChainId,
+} from "./addresses";
 import { Button } from "./components/Button";
 import { Card } from "./components/Card";
 import { Toast } from "./components/Toast";
@@ -48,15 +55,16 @@ export default function App() {
   }, [slippageBps]);
 
   const account = address ?? null;
-  const needsMainnet = chainId !== undefined && chainId !== MAINNET_CHAIN_ID;
+  const activeAddresses = getAddresses(chainId);
+  const isUnsupportedChain = chainId !== undefined && !isSupportedChainId(chainId);
   const ethBalance = ethBalanceData?.value ?? null;
 
   function onConnect() {
     connect({ connector: injected() });
   }
 
-  function onSwitchMainnet() {
-    switchChain({ chainId: mainnet.id });
+  function onSwitchChain(targetChainId: SupportedChainId) {
+    switchChain({ chainId: targetChainId });
   }
 
   function toggleTab() {
@@ -71,7 +79,7 @@ export default function App() {
           chainId={chainId ?? null}
           ethBalance={ethBalance}
           onConnect={onConnect}
-          onSwitchMainnet={onSwitchMainnet}
+          onSwitchChain={onSwitchChain}
         />
 
         <div className="contentArea">
@@ -112,17 +120,19 @@ export default function App() {
               </TabPill>
             </div>
 
-            {needsMainnet ? (
+            {isUnsupportedChain ? (
               <div className="networkWarn">
-                Connected to chainId <b>{chainId}</b>. This app is for{" "}
-                <b>Ethereum mainnet (1)</b>. Switch networks to continue.
+                Connected to chainId <b>{chainId}</b>. Supported networks are{" "}
+                <b>{getSupportedChainText()}</b>. Switch networks to continue.
               </div>
             ) : null}
 
             {tab === "ethToToken" ? (
               <EthToToken
                 account={account}
-                disabled={!account || needsMainnet}
+                chainId={chainId}
+                addresses={activeAddresses}
+                disabled={!account || !activeAddresses}
                 slipBps={slip}
                 onToast={setToast}
                 onFlip={toggleTab}
@@ -131,7 +141,9 @@ export default function App() {
             ) : (
               <TokenToEth
                 account={account}
-                disabled={!account || needsMainnet}
+                chainId={chainId}
+                addresses={activeAddresses}
+                disabled={!account || !activeAddresses}
                 slipBps={slip}
                 onToast={setToast}
                 onFlip={toggleTab}
@@ -142,7 +154,7 @@ export default function App() {
 
           {/* Contracts footer */}
           <div className="contractsFooterWrap">
-            <ContractsFooter />
+            <ContractsFooter chainId={chainId ?? null} addresses={activeAddresses} />
           </div>
         </div>
       </div>
@@ -159,10 +171,11 @@ function Header(props: {
   chainId: number | null;
   ethBalance: bigint | null;
   onConnect: () => void;
-  onSwitchMainnet: () => void;
+  onSwitchChain: (chainId: SupportedChainId) => void;
 }) {
   const short = props.account ? `${props.account.slice(0, 6)}…${props.account.slice(-4)}` : null;
   const balance = props.ethBalance !== null ? formatAmount(props.ethBalance, 18, 5) : null;
+  const supportedChain = props.chainId !== null && isSupportedChainId(props.chainId);
 
   return (
     <div className="header">
@@ -174,16 +187,24 @@ function Header(props: {
       <div className="headerRight">
         {props.account ? (
           <>
-            {props.chainId !== null && props.chainId !== 1 && (
-              <Button variant="ghost" onClick={props.onSwitchMainnet} className="sm">
-                Switch to Mainnet
-              </Button>
+            {props.chainId !== null && !supportedChain && (
+              <>
+                <Button variant="ghost" onClick={() => props.onSwitchChain(mainnet.id)} className="sm">
+                  Mainnet
+                </Button>
+                <Button variant="ghost" onClick={() => props.onSwitchChain(sepolia.id)} className="sm">
+                  Sepolia
+                </Button>
+              </>
             )}
             <div className="accountBadge">
               {balance !== null && <span className="accountBalance">{balance} ETH</span>}
-              <span className="accountAddress">
+              <span
+                className="accountAddress"
+                title={props.chainId !== null ? getChainName(props.chainId) : undefined}
+              >
                 {props.chainId !== null && (
-                  <span className={`chainDot ${props.chainId === 1 ? "mainnet" : "other"}`} />
+                  <span className={`chainDot ${supportedChain ? "supported" : "other"}`} />
                 )}
                 {short}
               </span>
@@ -247,6 +268,8 @@ function QuoteRow(props: { label: string; value: string; muted?: boolean }) {
 
 function EthToToken(props: {
   account: Address | null;
+  chainId?: number;
+  addresses: Addresses | null;
   disabled: boolean;
   slipBps: number;
   onToast: (s: string) => void;
@@ -256,7 +279,12 @@ function EthToToken(props: {
   const [tokenOutRaw, setTokenOutRaw] = useState<string>("");
   const [ethIn, setEthIn] = useState<string>("0.01");
 
-  const { meta: outMeta, error: tokenErr } = useTokenMeta(tokenOutRaw, "token");
+  const { meta: outMeta, error: tokenErr } = useTokenMeta(
+    tokenOutRaw,
+    "token",
+    props.chainId,
+    props.addresses?.WETH9 as Address | undefined
+  );
 
   const amountIn = useMemo(() => {
     try {
@@ -268,11 +296,16 @@ function EthToToken(props: {
   }, [ethIn]);
 
   const path = useMemo(() => {
-    if (!outMeta) return null;
-    return [addresses.WETH9 as Address, outMeta.address];
-  }, [outMeta]);
+    if (!outMeta || !props.addresses) return null;
+    return [props.addresses.WETH9 as Address, outMeta.address];
+  }, [outMeta, props.addresses]);
 
-  const quote = useQuote(amountIn, path);
+  const quote = useQuote(
+    amountIn,
+    path,
+    props.chainId,
+    props.addresses?.UniswapV2Router02 as Address | undefined
+  );
 
   const minOut = useMemo(() => {
     if (quote.status !== "ready") return null;
@@ -280,11 +313,14 @@ function EthToToken(props: {
   }, [quote, props.slipBps]);
 
   const { writeContractAsync } = useWriteContract();
-  const client = usePublicClient();
+  const client = usePublicClient({
+    chainId: isSupportedChainId(props.chainId) ? props.chainId : undefined,
+  });
 
   async function onSwap() {
     if (props.disabled) return;
     if (!props.account) return props.onToast("Connect a wallet first.");
+    if (!props.addresses) return props.onToast(`Unsupported network. Use ${getSupportedChainText()}.`);
     if (!outMeta) return props.onToast("Enter a valid token address.");
     if (!amountIn || amountIn <= 0n) return props.onToast("Enter a valid ETH amount.");
     if (!minOut) return props.onToast("Quote not ready yet.");
@@ -292,10 +328,15 @@ function EthToToken(props: {
     try {
       const deadline = nowPlusMinutes(10);
       const hash = await writeContractAsync({
-        address: addresses.UniswapV2Router02 as Address,
+        address: props.addresses.UniswapV2Router02 as Address,
         abi: ABI.router,
         functionName: "swapExactETHForTokens",
-        args: [minOut, [addresses.WETH9 as Address, outMeta.address], props.account, deadline],
+        args: [
+          minOut,
+          [props.addresses.WETH9 as Address, outMeta.address],
+          props.account,
+          deadline,
+        ],
         value: amountIn,
       });
       props.onToast(`Swap submitted: ${hash}`);
@@ -379,6 +420,8 @@ function EthToToken(props: {
 
 function TokenToEth(props: {
   account: Address | null;
+  chainId?: number;
+  addresses: Addresses | null;
   disabled: boolean;
   slipBps: number;
   onToast: (s: string) => void;
@@ -388,13 +431,19 @@ function TokenToEth(props: {
   const [tokenInRaw, setTokenInRaw] = useState<string>("");
   const [tokenInAmount, setTokenInAmount] = useState<string>("");
 
-  const { meta: inMeta, error: tokenErr } = useTokenMeta(tokenInRaw, "token");
+  const { meta: inMeta, error: tokenErr } = useTokenMeta(
+    tokenInRaw,
+    "token",
+    props.chainId,
+    props.addresses?.WETH9 as Address | undefined
+  );
 
-  const tokenBal = useErc20Balance(inMeta?.address, props.account ?? undefined);
+  const tokenBal = useErc20Balance(inMeta?.address, props.account ?? undefined, props.chainId);
   const allowance = useAllowance(
     inMeta?.address,
     props.account ?? undefined,
-    addresses.UniswapV2Router02 as Address
+    props.addresses?.UniswapV2Router02 as Address | undefined,
+    props.chainId
   );
 
   const amountIn = useMemo(() => {
@@ -403,11 +452,16 @@ function TokenToEth(props: {
   }, [tokenInAmount, inMeta]);
 
   const path = useMemo(() => {
-    if (!inMeta) return null;
-    return [inMeta.address, addresses.WETH9 as Address];
-  }, [inMeta]);
+    if (!inMeta || !props.addresses) return null;
+    return [inMeta.address, props.addresses.WETH9 as Address];
+  }, [inMeta, props.addresses]);
 
-  const quote = useQuote(amountIn, path);
+  const quote = useQuote(
+    amountIn,
+    path,
+    props.chainId,
+    props.addresses?.UniswapV2Router02 as Address | undefined
+  );
 
   const minOut = useMemo(() => {
     if (quote.status !== "ready") return null;
@@ -421,11 +475,14 @@ function TokenToEth(props: {
   }, [allowance, amountIn]);
 
   const { writeContractAsync } = useWriteContract();
-  const client = usePublicClient();
+  const client = usePublicClient({
+    chainId: isSupportedChainId(props.chainId) ? props.chainId : undefined,
+  });
 
   async function onApprove() {
     if (props.disabled) return;
     if (!props.account) return props.onToast("Connect a wallet first.");
+    if (!props.addresses) return props.onToast(`Unsupported network. Use ${getSupportedChainText()}.`);
     if (!inMeta) return props.onToast("Enter a valid token address.");
 
     try {
@@ -433,7 +490,7 @@ function TokenToEth(props: {
         address: inMeta.address,
         abi: ABI.erc20,
         functionName: "approve",
-        args: [addresses.UniswapV2Router02 as Address, maxUint256],
+        args: [props.addresses.UniswapV2Router02 as Address, maxUint256],
       });
       props.onToast(`Approve submitted: ${hash}`);
       const receipt = await client!.waitForTransactionReceipt({ hash });
@@ -446,6 +503,7 @@ function TokenToEth(props: {
   async function onSwap() {
     if (props.disabled) return;
     if (!props.account) return props.onToast("Connect a wallet first.");
+    if (!props.addresses) return props.onToast(`Unsupported network. Use ${getSupportedChainText()}.`);
     if (!inMeta) return props.onToast("Enter a valid token address.");
     if (!amountIn || amountIn <= 0n) return props.onToast("Enter a valid token amount.");
     if (!minOut) return props.onToast("Quote not ready yet.");
@@ -453,10 +511,16 @@ function TokenToEth(props: {
     try {
       const deadline = nowPlusMinutes(10);
       const hash = await writeContractAsync({
-        address: addresses.UniswapV2Router02 as Address,
+        address: props.addresses.UniswapV2Router02 as Address,
         abi: ABI.router,
         functionName: "swapExactTokensForETH",
-        args: [amountIn, minOut, [inMeta.address, addresses.WETH9 as Address], props.account, deadline],
+        args: [
+          amountIn,
+          minOut,
+          [inMeta.address, props.addresses.WETH9 as Address],
+          props.account,
+          deadline,
+        ],
       });
       props.onToast(`Swap submitted: ${hash}`);
       const receipt = await client!.waitForTransactionReceipt({ hash });
@@ -561,7 +625,7 @@ function TokenToEth(props: {
 
 /* ─── Contracts footer ─── */
 
-function ContractsFooter() {
+function ContractsFooter(props: { chainId: number | null; addresses: Addresses | null }) {
   const [open, setOpen] = useState(false);
 
   return (
@@ -572,18 +636,27 @@ function ContractsFooter() {
       {open && (
         <div className="contractsList">
           <div>
-            Router02: <code>{addresses.UniswapV2Router02}</code>
+            Network: <code>{props.chainId === null ? "Not connected" : getChainName(props.chainId)}</code>
           </div>
-          <div>
-            Factory: <code>{addresses.UniswapV2Factory}</code>
-          </div>
-          <div>
-            WETH: <code>{addresses.WETH9}</code>
-          </div>
-          <div className="contractsDisclaimer">
-            Quotes: <code>getAmountsOut</code> · Swaps: <code>swapExactETHForTokens</code> /{" "}
-            <code>swapExactTokensForETH</code>
-          </div>
+          {props.addresses ? (
+            <>
+              <div>
+                Router02: <code>{props.addresses.UniswapV2Router02}</code>
+              </div>
+              <div>
+                Factory: <code>{props.addresses.UniswapV2Factory}</code>
+              </div>
+              <div>
+                WETH: <code>{props.addresses.WETH9}</code>
+              </div>
+              <div className="contractsDisclaimer">
+                Quotes: <code>getAmountsOut</code> · Swaps: <code>swapExactETHForTokens</code> /{" "}
+                <code>swapExactTokensForETH</code>
+              </div>
+            </>
+          ) : (
+            <div className="contractsDisclaimer">Supported networks: {getSupportedChainText()}.</div>
+          )}
         </div>
       )}
     </div>
