@@ -1,4 +1,3 @@
-export const APP_CSS = `
 :root {
   color-scheme: dark;
   --bg: #090d12;
@@ -558,4 +557,3 @@ button.secondary:hover:not(:disabled) {
     margin-top: 4px;
   }
 }
-`;
