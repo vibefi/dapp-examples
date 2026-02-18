@@ -22,26 +22,27 @@ If you would like a new package to be added to this list, you can open a [client
 - assets/ (.webp only) 
 - abis/ (.json only) 
 - index.html
-- addresses.json (deployed addresses needed for protocol) 
-- manifest.json
+- vibefi.json (vapp properties, including addresses + capabilities)
 
 ### Developing
 To get started we recommend you use `TODO: insert cli command` to scaffold your project. This will contain more files than the constrained files so that you can actually locally run and test your dapp. When packaging and publishing on VibeFi, these files will be ignored.
 
 In order to help with vibe-coding, we have a [prompt.md](./prompt.md) which you can use to get your agent going in the right direction.
 
-### Addresses
+### vibefi.json
 
-TODO: schema for addresses.json
-
-### Manifest
-
-`manifest.json` is part of the source bundle contract and must include a
-`capabilities` section when your vapp needs extra injected runtime capabilities.
+`vibefi.json` is part of the source bundle contract. It contains:
+1. `addresses`: deployed addresses needed for the protocol.
+2. `capabilities`: optional runtime capability declarations.
 
 Current capability surface:
 ```json
 {
+  "addresses": {
+    "mainnet": {
+      "UniswapV2Router02": "0x7a250d5630B4cF539739dF2C5dAcb4c659F2488D"
+    }
+  },
   "capabilities": {
     "ipfs": {
       "allow": [
@@ -67,7 +68,7 @@ Notes:
 ## Resources
 - Injected Wallet (`window.ethereum`)
 - Injected RPC_URLs (TODO: maybe we don't need this? could we do all calls via injected wallet?)
-- Injected IPFS data API (`window.vibefiIpfs`) behind manifest capabilities
+- Injected IPFS data API (`window.vibefiIpfs`) behind vibefi capabilities
 
 ## Security Requirements for IPFS Data
 1. IPFS-derived content is untrusted data, never executable code.
