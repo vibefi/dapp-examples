@@ -93,7 +93,7 @@ export function AddressBookCard({ entries, onEntriesChange }: AddressBookCardPro
             <li key={entry.id} className="addressBookItem">
               <div className="addressBookName">{entry.name}</div>
               <div className="addressBookAddress">
-                {entry.name} ({shortAddress(entry.address)})
+                {shortAddress(entry.address)}
               </div>
               <button type="button" className="secondary addressBookRemove" onClick={() => onRemoveAddress(entry.id)}>
                 Remove
