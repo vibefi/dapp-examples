@@ -8,6 +8,8 @@ const SENTINEL_OWNERS = "0x0000000000000000000000000000000000000001" as const;
 type SettingsCardProps = {
   overview: SafeOverview | null;
   formatAddressFull: (address: Address) => string;
+  canPropose: boolean;
+  proposeDisabledReason: string | null;
   onCreateProposal: (draft: {
     title: string;
     description: string | null;
@@ -26,7 +28,7 @@ function parseThreshold(value: string): number | null {
   return parsed;
 }
 
-export function SettingsCard({ overview, formatAddressFull, onCreateProposal }: SettingsCardProps) {
+export function SettingsCard({ overview, formatAddressFull, canPropose, proposeDisabledReason, onCreateProposal }: SettingsCardProps) {
   const [error, setError] = useState<string | null>(null);
   const [addOwnerInput, setAddOwnerInput] = useState("");
   const [addThresholdInput, setAddThresholdInput] = useState("");
@@ -79,6 +81,10 @@ export function SettingsCard({ overview, formatAddressFull, onCreateProposal }: 
       setError("Load a Safe on Home before creating admin proposals.");
       return;
     }
+    if (!canPropose) {
+      setError(proposeDisabledReason ?? "Connected wallet is not allowed to create proposals for this Safe.");
+      return;
+    }
 
     if (!isAddress(addOwnerInput.trim())) {
       setError("Enter a valid signer address to add.");
@@ -121,6 +127,10 @@ export function SettingsCard({ overview, formatAddressFull, onCreateProposal }: 
     event.preventDefault();
     if (!overview) {
       setError("Load a Safe on Home before creating admin proposals.");
+      return;
+    }
+    if (!canPropose) {
+      setError(proposeDisabledReason ?? "Connected wallet is not allowed to create proposals for this Safe.");
       return;
     }
     if (overview.owners.length <= 1) {
@@ -170,6 +180,10 @@ export function SettingsCard({ overview, formatAddressFull, onCreateProposal }: 
     event.preventDefault();
     if (!overview) {
       setError("Load a Safe on Home before creating admin proposals.");
+      return;
+    }
+    if (!canPropose) {
+      setError(proposeDisabledReason ?? "Connected wallet is not allowed to create proposals for this Safe.");
       return;
     }
 
@@ -222,6 +236,7 @@ export function SettingsCard({ overview, formatAddressFull, onCreateProposal }: 
         <p className="muted">
           These actions create Safe transaction payloads targeting {formatAddressFull(overview.safeAddress)}.
         </p>
+        {!canPropose ? <p className="warn">{proposeDisabledReason ?? "Proposal actions are disabled."}</p> : null}
       </section>
 
       <div className="settingsGrid">
@@ -246,7 +261,7 @@ export function SettingsCard({ overview, formatAddressFull, onCreateProposal }: 
                 inputMode="numeric"
                 pattern="[0-9]*"
               />
-              <button type="submit" disabled={isSubmitting}>
+              <button type="submit" disabled={isSubmitting || !canPropose}>
                 Propose add signer
               </button>
             </div>
@@ -273,7 +288,7 @@ export function SettingsCard({ overview, formatAddressFull, onCreateProposal }: 
                 inputMode="numeric"
                 pattern="[0-9]*"
               />
-              <button type="submit" disabled={isSubmitting || overview.owners.length <= 1}>
+              <button type="submit" disabled={isSubmitting || overview.owners.length <= 1 || !canPropose}>
                 Propose remove signer
               </button>
             </div>
@@ -293,7 +308,7 @@ export function SettingsCard({ overview, formatAddressFull, onCreateProposal }: 
               inputMode="numeric"
               pattern="[0-9]*"
             />
-            <button type="submit" disabled={isSubmitting}>
+            <button type="submit" disabled={isSubmitting || !canPropose}>
               Propose threshold change
             </button>
           </div>

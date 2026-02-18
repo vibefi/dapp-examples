@@ -17,6 +17,8 @@ type ProposedTransactionsCardProps = {
   overview: SafeOverview | null;
   walletAccount: Address | null;
   isConnected: boolean;
+  canManage: boolean;
+  manageDisabledReason: string | null;
   proposals: SafeProposedTransaction[];
   formatAddressFull: (address: Address) => string;
   onAddSignature: (safeTxHash: Hex, signature: SafeProposalSignature) => void;
@@ -29,6 +31,8 @@ export function ProposedTransactionsCard({
   overview,
   walletAccount,
   isConnected,
+  canManage,
+  manageDisabledReason,
   proposals,
   formatAddressFull,
   onAddSignature,
@@ -50,16 +54,14 @@ export function ProposedTransactionsCard({
 
   const activeOwners = overview?.owners ?? [];
   const threshold = overview?.threshold ?? 0;
-  const walletIsOwner =
-    walletAccount !== null && activeOwners.some((owner) => owner.toLowerCase() === walletAccount.toLowerCase());
 
   async function onSignProposal(proposal: SafeProposedTransaction) {
     if (!walletAccount) {
       setError("Connect wallet to sign.");
       return;
     }
-    if (!walletIsOwner) {
-      setError("Connected wallet is not a signer for the loaded Safe.");
+    if (!canManage) {
+      setError(manageDisabledReason ?? "Connected wallet is not a signer for the loaded Safe.");
       return;
     }
     if (!isConnected) {
@@ -95,6 +97,10 @@ export function ProposedTransactionsCard({
       setError("Connect wallet to copy signed proposal JSON.");
       return;
     }
+    if (!canManage) {
+      setError(manageDisabledReason ?? "Connected wallet is not a signer for the loaded Safe.");
+      return;
+    }
 
     const walletSigned = proposal.signatures.some((entry) => entry.owner.toLowerCase() === walletAccount.toLowerCase());
     if (!walletSigned) {
@@ -115,6 +121,10 @@ export function ProposedTransactionsCard({
   async function onImportPayload() {
     setNotice(null);
     setError(null);
+    if (!canManage) {
+      setError(manageDisabledReason ?? "Connected wallet is not a signer for the loaded Safe.");
+      return;
+    }
 
     let parsed: unknown;
     try {
@@ -157,6 +167,10 @@ export function ProposedTransactionsCard({
     }
     if (!isConnected) {
       setError("Connect wallet to execute.");
+      return;
+    }
+    if (!canManage) {
+      setError(manageDisabledReason ?? "Connected wallet is not a signer for the loaded Safe.");
       return;
     }
 
@@ -214,6 +228,7 @@ export function ProposedTransactionsCard({
         <p className="muted">
           Sign proposals, share/import partial signatures as JSON, and execute once signatures reach the Safe threshold.
         </p>
+        {!canManage ? <p className="warn">{manageDisabledReason ?? "Proposal actions are disabled."}</p> : null}
       </section>
 
       {error ? <p className="error">{error}</p> : null}
@@ -230,7 +245,7 @@ export function ProposedTransactionsCard({
             placeholder='{"version":1,...}'
             spellCheck={false}
           />
-          <button type="button" onClick={() => void onImportPayload()}>
+          <button type="button" onClick={() => void onImportPayload()} disabled={!canManage}>
             Import proposal JSON
           </button>
         </div>
@@ -283,7 +298,7 @@ export function ProposedTransactionsCard({
                       disabled={
                         isBusy ||
                         proposal.executedTxHash !== null ||
-                        !walletIsOwner ||
+                        !canManage ||
                         walletAlreadySigned ||
                         !isConnected ||
                         !overview
@@ -300,6 +315,7 @@ export function ProposedTransactionsCard({
                         proposal.executedTxHash !== null ||
                         enoughSignatures ||
                         !isConnected ||
+                        !canManage ||
                         !walletAlreadySigned
                       }
                       onClick={() => void onCopyProposal(proposal)}
@@ -314,13 +330,14 @@ export function ProposedTransactionsCard({
                         proposal.executedTxHash !== null ||
                         !overview ||
                         proposal.safeAddress.toLowerCase() !== overview.safeAddress.toLowerCase() ||
+                        !canManage ||
                         !enoughSignatures
                       }
                       onClick={() => void onExecuteProposal(proposal)}
                     >
                       Execute
                     </button>
-                    <button type="button" className="secondary" onClick={() => onRemoveProposal(proposal.safeTxHash)}>
+                    <button type="button" className="secondary" disabled={!canManage} onClick={() => onRemoveProposal(proposal.safeTxHash)}>
                       Remove
                     </button>
                   </div>

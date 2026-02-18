@@ -77,6 +77,18 @@ export default function App() {
     return walletChainId !== configuredChainId;
   }, [walletChainId, configuredChainId, isConnected]);
 
+  const walletIsSignerForLoadedSafe = useMemo(() => {
+    if (!overview || !walletAccount || !isConnected) return false;
+    return overview.owners.some((owner) => owner.toLowerCase() === walletAccount.toLowerCase());
+  }, [overview, walletAccount, isConnected]);
+
+  const signerActionGateReason = useMemo(() => {
+    if (!overview) return "Load a Safe on Home first.";
+    if (!isConnected || !walletAccount) return "Connect a signer wallet to continue.";
+    if (!walletIsSignerForLoadedSafe) return "Connected wallet is not a signer for the loaded Safe.";
+    return null;
+  }, [overview, isConnected, walletAccount, walletIsSignerForLoadedSafe]);
+
   const addressBookNamesByAddress = useMemo(() => {
     return new Map(addressBookEntries.map((entry) => [entry.address.toLowerCase(), entry.name]));
   }, [addressBookEntries]);
@@ -215,6 +227,8 @@ export default function App() {
   }) {
     if (!overview) throw new Error("Load a Safe on Home before creating proposals.");
     if (!publicClient) throw new Error("No public client available.");
+    if (!isConnected || !walletAccount) throw new Error("Connect a signer wallet before creating proposals.");
+    if (!walletIsSignerForLoadedSafe) throw new Error("Connected wallet is not a signer for the loaded Safe.");
 
     const pendingNonces = new Set(
       proposals
@@ -540,6 +554,8 @@ export default function App() {
             overview ? (
               <TokenBalancesCard
                 safeAddress={overview.safeAddress}
+                canPropose={walletIsSignerForLoadedSafe}
+                proposeDisabledReason={signerActionGateReason}
                 trackedTokenCount={trackedTokenAddresses.length}
                 customTokenInput={customTokenInput}
                 onCustomTokenInputChange={setCustomTokenInput}
@@ -582,6 +598,8 @@ export default function App() {
               overview={overview}
               walletAccount={walletAccount ?? null}
               isConnected={isConnected}
+              canManage={walletIsSignerForLoadedSafe}
+              manageDisabledReason={signerActionGateReason}
               proposals={proposals}
               formatAddressFull={formatAddressFull}
               onAddSignature={onAddProposalSignature}
@@ -594,7 +612,13 @@ export default function App() {
           {activeTab === "address-book" ? <AddressBookCard entries={addressBookEntries} onEntriesChange={setAddressBookEntries} /> : null}
 
           {activeTab === "settings" ? (
-            <SettingsCard overview={overview} formatAddressFull={formatAddressFull} onCreateProposal={onCreateProposal} />
+            <SettingsCard
+              overview={overview}
+              formatAddressFull={formatAddressFull}
+              onCreateProposal={onCreateProposal}
+              canPropose={walletIsSignerForLoadedSafe}
+              proposeDisabledReason={signerActionGateReason}
+            />
           ) : null}
 
           {activeTab === "apps" ? (

@@ -5,6 +5,8 @@ import type { DetectedTokenBalance } from "../hooks/useTokenBalances";
 
 type TokenBalancesCardProps = {
   safeAddress: Address | null;
+  canPropose: boolean;
+  proposeDisabledReason: string | null;
   trackedTokenCount: number;
   customTokenInput: string;
   onCustomTokenInputChange: (value: string) => void;
@@ -28,6 +30,8 @@ type TokenBalancesCardProps = {
 
 export function TokenBalancesCard({
   safeAddress,
+  canPropose,
+  proposeDisabledReason,
   trackedTokenCount,
   customTokenInput,
   onCustomTokenInputChange,
@@ -93,6 +97,10 @@ export function TokenBalancesCard({
       setSendError("Load a Safe on Home before proposing transfers.");
       return;
     }
+    if (!canPropose) {
+      setSendError(proposeDisabledReason ?? "Connected wallet is not allowed to create proposals for this Safe.");
+      return;
+    }
     if (!isAddress(ethRecipientInput.trim())) {
       setSendError("Enter a valid ETH recipient address.");
       return;
@@ -132,6 +140,10 @@ export function TokenBalancesCard({
     event.preventDefault();
     if (!safeAddress) {
       setSendError("Load a Safe on Home before proposing transfers.");
+      return;
+    }
+    if (!canPropose) {
+      setSendError(proposeDisabledReason ?? "Connected wallet is not allowed to create proposals for this Safe.");
       return;
     }
     if (!isAddress(tokenAddressInput)) {
@@ -226,6 +238,7 @@ export function TokenBalancesCard({
         <p className="muted">Custom tracked: {customTrackedTokens.map((tokenAddress) => formatAddressShort(tokenAddress)).join(", ")}</p>
       ) : null}
       {tokenBalanceError ? <p className="error">{tokenBalanceError}</p> : null}
+      {!canPropose ? <p className="warn">{proposeDisabledReason ?? "Proposal actions are disabled."}</p> : null}
       {sendError ? <p className="error">{sendError}</p> : null}
 
       <div className="settingsGrid">
@@ -250,7 +263,7 @@ export function TokenBalancesCard({
                 placeholder="0.1"
                 inputMode="decimal"
               />
-              <button type="submit" disabled={isSubmitting}>
+              <button type="submit" disabled={isSubmitting || !canPropose}>
                 Propose ETH tx
               </button>
             </div>
@@ -291,7 +304,7 @@ export function TokenBalancesCard({
                 placeholder="0.0"
                 inputMode="decimal"
               />
-              <button type="submit" disabled={isSubmitting || uniqueDetectedTokens.length === 0}>
+              <button type="submit" disabled={isSubmitting || uniqueDetectedTokens.length === 0 || !canPropose}>
                 Propose token tx
               </button>
             </div>
