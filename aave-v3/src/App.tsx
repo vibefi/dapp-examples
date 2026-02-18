@@ -1,9 +1,8 @@
-import * as React from 'react'
-import { WalletBar } from './components/WalletBar'
-import { AccountOverview } from './components/AccountOverview'
-import { AssetPanel } from './components/AssetPanel'
+import { WalletBar } from "./components/WalletBar";
+import { AccountOverview } from "./components/AccountOverview";
+import { AssetPanel } from "./components/AssetPanel";
 
-const aaveLogoUrl = new URL('../assets/aave.webp', import.meta.url).href
+const aaveLogoUrl = new URL("../assets/aave.webp", import.meta.url).href;
 
 export default function App() {
   return (
@@ -58,5 +57,5 @@ export default function App() {
         </div>
       </div>
     </div>
-  )
+  );
 }

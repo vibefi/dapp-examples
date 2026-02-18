@@ -12,7 +12,7 @@ function getInjectedProvider(): EIP1193Provider {
   return eth;
 }
 
-export const config = createConfig({
+export const wagmiConfig = createConfig({
   chains: [mainnet],
   connectors: [injected()],
   transports: {

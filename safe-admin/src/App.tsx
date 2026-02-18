@@ -6,7 +6,6 @@ import { TokenBalancesCard } from "./components/TokenBalancesCard";
 import { getConfiguredChainId, getRpcUrl } from "./env";
 import { useTokenBalances } from "./hooks/useTokenBalances";
 import { DEFAULT_HISTORY_LOOKBACK_BLOCKS, isSafeContract, loadSafeExecutionHistory, loadSafeOverview } from "./safe";
-import { APP_CSS } from "./styles/appCss";
 import type { SafeExecutionHistoryItem, SafeOverview } from "./types";
 import { mergeHistory, sortHistory } from "./utils/history";
 import { formatEtherDisplay } from "./utils/format";
@@ -155,7 +154,6 @@ export default function App() {
 
   return (
     <div className="shell">
-      <style>{APP_CSS}</style>
       <div className="appFrame">
         <aside className="sidebar">
           <div className="brand">
