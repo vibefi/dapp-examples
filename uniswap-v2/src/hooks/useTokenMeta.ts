@@ -1,6 +1,7 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo } from "react";
 import type { Address } from "viem";
-import { publicClient } from "../clients";
+import { usePublicClient } from "wagmi";
+import { useQuery } from "@tanstack/react-query";
 import { ABI } from "../abis";
 import { addresses } from "../addresses";
 import { isAddressLike } from "../utils";
@@ -19,49 +20,31 @@ const WETH_META: TokenMeta = {
   name: "Wrapped Ether",
 };
 
-export function useTokenMeta(input: string, mode: "token" | "weth" = "token") {
-  const [meta, setMeta] = useState<TokenMeta | null>(mode === "weth" ? WETH_META : null);
-  const [error, setError] = useState<string | null>(null);
-
+export function useTokenMeta(
+  input: string,
+  mode: "token" | "weth" = "token"
+): { meta: TokenMeta | null; error: string | null } {
+  const client = usePublicClient();
   const addr = useMemo(() => (isAddressLike(input) ? (input as Address) : null), [input]);
 
-  useEffect(() => {
-    let cancelled = false;
+  const { data, error } = useQuery({
+    queryKey: ["tokenMeta", addr],
+    queryFn: async () => {
+      const [symbol, decimals, name] = await Promise.all([
+        client!.readContract({ address: addr!, abi: ABI.erc20, functionName: "symbol" }) as Promise<string>,
+        client!.readContract({ address: addr!, abi: ABI.erc20, functionName: "decimals" }) as Promise<number>,
+        client!.readContract({ address: addr!, abi: ABI.erc20, functionName: "name" }) as Promise<string>,
+      ]);
+      return { address: addr!, symbol, decimals, name };
+    },
+    enabled: mode === "token" && Boolean(addr && client),
+    retry: false,
+    staleTime: Infinity,
+  });
 
-    async function run() {
-      if (mode === "weth") {
-        setMeta(WETH_META);
-        setError(null);
-        return;
-      }
-
-      if (!addr) {
-        setMeta(null);
-        setError(input.trim() ? "Invalid token address" : null);
-        return;
-      }
-
-      try {
-        setError(null);
-        const [symbol, decimals, name] = await Promise.all([
-          publicClient.readContract({ address: addr, abi: ABI.erc20, functionName: "symbol" }) as Promise<string>,
-          publicClient.readContract({ address: addr, abi: ABI.erc20, functionName: "decimals" }) as Promise<number>,
-          publicClient.readContract({ address: addr, abi: ABI.erc20, functionName: "name" }) as Promise<string>,
-        ]);
-        if (cancelled) return;
-        setMeta({ address: addr, symbol, decimals, name });
-      } catch {
-        if (cancelled) return;
-        setMeta(null);
-        setError("Could not fetch token metadata (is it an ERC-20?)");
-      }
-    }
-
-    run();
-    return () => {
-      cancelled = true;
-    };
-  }, [addr, input, mode]);
-
-  return { meta, error };
+  if (mode === "weth") return { meta: WETH_META, error: null };
+  if (!input.trim()) return { meta: null, error: null };
+  if (!addr) return { meta: null, error: "Invalid token address" };
+  if (error) return { meta: null, error: "Could not fetch token metadata (is it an ERC-20?)" };
+  return { meta: data ?? null, error: null };
 }

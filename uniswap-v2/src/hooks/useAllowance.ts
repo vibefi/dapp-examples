@@ -1,39 +1,14 @@
-import { useEffect, useState } from "react";
 import type { Address } from "viem";
-import { publicClient } from "../clients";
+import { useReadContract } from "wagmi";
 import { ABI } from "../abis";
 
-export function useAllowance(token?: Address, owner?: Address, spender?: Address) {
-  const [allowance, setAllowance] = useState<bigint | null>(null);
-
-  useEffect(() => {
-    let cancelled = false;
-
-    async function run() {
-      if (!token || !owner || !spender) {
-        setAllowance(null);
-        return;
-      }
-      try {
-        const a = await publicClient.readContract({
-          address: token,
-          abi: ABI.erc20,
-          functionName: "allowance",
-          args: [owner, spender],
-        }) as bigint;
-        if (!cancelled) setAllowance(a);
-      } catch {
-        if (!cancelled) setAllowance(null);
-      }
-    }
-
-    run();
-    const id = setInterval(run, 10_000);
-    return () => {
-      cancelled = true;
-      clearInterval(id);
-    };
-  }, [token, owner, spender]);
-
-  return allowance;
+export function useAllowance(token?: Address, owner?: Address, spender?: Address): bigint | null {
+  const { data } = useReadContract({
+    address: token,
+    abi: ABI.erc20,
+    functionName: "allowance",
+    args: owner && spender ? [owner, spender] : undefined,
+    query: { enabled: Boolean(token && owner && spender), refetchInterval: 10_000 },
+  });
+  return (data as bigint | undefined) ?? null;
 }

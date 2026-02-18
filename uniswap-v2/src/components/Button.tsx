@@ -1,15 +1,9 @@
-import { type ButtonHTMLAttributes } from "react";
+import type { ButtonHTMLAttributes } from "react";
 
-export function Button(props: ButtonHTMLAttributes<HTMLButtonElement> & { variant?: "primary" | "ghost" }) {
-  const { variant = "primary", style, ...rest } = props;
-  const base: React.CSSProperties = {
-    padding: "10px 12px",
-    borderRadius: 10,
-    border: "1px solid rgba(255,255,255,0.12)",
-    cursor: "pointer",
-    fontWeight: 600,
-    background: variant === "primary" ? "rgba(255,105,180,0.14)" : "transparent",
-    color: "white",
-  };
-  return <button {...rest} style={{ ...base, ...(style || {}) }} />;
+export function Button(
+  props: ButtonHTMLAttributes<HTMLButtonElement> & { variant?: "primary" | "ghost" | "cta" }
+) {
+  const { variant = "primary", className, ...rest } = props;
+  const cls = ["btn", variant, className].filter(Boolean).join(" ");
+  return <button {...rest} className={cls} />;
 }

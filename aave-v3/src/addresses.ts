@@ -1,23 +1,23 @@
 import vibefi from '../vibefi.json'
 
-export type Address = `0x${string}`
+export type Address = `0x${string}`;
 
 type AddressesJson = {
-  mainnet: Record<string, Address>
-}
+  mainnet: Record<string, Address>;
+};
 
-type Asset = { address: Address; decimals: number }
+type Asset = { address: Address; decimals: number };
 type Addresses = {
-  chainId: number
+  chainId: number;
   aaveV3: {
-    pool: Address
-    poolAddressesProvider: Address
-    protocolDataProvider: Address
-    uiPoolDataProvider: Address
-    wrappedTokenGateway: Address
-  }
-  assets: Record<string, Asset>
-}
+    pool: Address;
+    poolAddressesProvider: Address;
+    protocolDataProvider: Address;
+    uiPoolDataProvider: Address;
+    wrappedTokenGateway: Address;
+  };
+  assets: Record<string, Asset>;
+};
 
 const json = (vibefi as { addresses: AddressesJson }).addresses
 
@@ -36,18 +36,18 @@ export const ADDRESSES: Addresses = {
     USDC: { address: json.mainnet.USDC, decimals: 6 },
     DAI: { address: json.mainnet.DAI, decimals: 18 },
   },
-}
+};
 
 export function getAssetSymbols(): string[] {
-  return Object.keys(ADDRESSES.assets)
+  return Object.keys(ADDRESSES.assets);
 }
 
 export function getAsset(symbol: string): Asset {
-  const a = ADDRESSES.assets[symbol]
-  if (!a) throw new Error(`Unknown asset: ${symbol}`)
-  return a
+  const a = ADDRESSES.assets[symbol];
+  if (!a) throw new Error(`Unknown asset: ${symbol}`);
+  return a;
 }
 
 export function isEthSymbol(symbol: string) {
-  return symbol.toUpperCase() === 'ETH'
+  return symbol.toUpperCase() === "ETH";
 }
