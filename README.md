@@ -20,5 +20,14 @@ bun install
 RPC_URL="https://mainnet.infura.io/v3/…" bun vite dev
 ```
 
+## Nested submodules
+
+- `zfi/` is a nested git submodule pointing to `https://github.com/z-fi/zFi`.
+- Initialize nested submodules from this repository with:
+
+```
+git submodule update --init --recursive
+```
+
 ## Publishing
 TODO: Section on publishing using `cli` and/or `studio`.
