@@ -2,7 +2,7 @@
 
 Fully client-side reference apps that showcase how to ship VibeFi "vapps" under the [constraints](./constraints.md) while following the authoring [prompt](./prompt.md).  
 
-Every example is a Vite + React 19 project that talks directly to Ethereum mainnet via JSON-RPC reads and `window.ethereum` writes; no server code or additional packages are included beyond the approved list.
+Examples in this repo are fully client-side and include both Vite + React projects and one static-html project (`zfi/` as a git submodule). All apps talk directly to Ethereum via JSON-RPC reads and `window.ethereum` writes; no server code is included.
 
 ## Constraints
 - Allowed runtime/dev dependencies are pinned; add-ons require a governance proposal before inclusion.
@@ -18,6 +18,16 @@ From each example folder, install deps and start Vite, e.g.:
 cd aave-v3
 bun install
 RPC_URL="https://mainnet.infura.io/v3/…" bun vite dev
+```
+
+## Nested submodules
+
+- `zfi/` is a nested git submodule pointing to `https://github.com/devanoneth/zFi.git`.
+- Initialize or resync nested submodules from this repository with:
+
+```
+git submodule sync --recursive
+git submodule update --init --recursive
 ```
 
 ## Publishing
