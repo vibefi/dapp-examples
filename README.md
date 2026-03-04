@@ -7,6 +7,8 @@ Examples in this repo are fully client-side and include both Vite + React projec
 ## Constraints
 - Allowed runtime/dev dependencies are pinned; add-ons require a governance proposal before inclusion.
 - Only ship `src/**/*.ts|tsx|css`, `assets/**/*.webp`, `abis/**/*.json`, `vibefi.json`, and `index.html`; build artifacts and extra tooling stay local.
+- Constrained vapps must use `src/main.tsx` as the entry file, and `index.html` must include:
+  - `<script type="module" src="/src/main.tsx"></script>`
 - All apps must rely on the injected `RPC_URL` (or `VITE_RPC_URL`) plus `window.ethereum`; arbitrary fetches are disallowed.
 - If your app needs IPFS reads, use injected `window.vibefiIpfs` and declare permissions in `vibefi.json` capabilities.
 - IPFS payloads are data-only and must never be sent to execution sinks.
