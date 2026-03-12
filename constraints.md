@@ -19,9 +19,11 @@ If you would like a new package to be added to this list, you can open a [client
 
 ## Files
 - src/ (.ts, .tsx, and .css only) 
+  - `src/main.tsx` is required as the constrained entrypoint file
 - assets/ (.webp only) 
 - abis/ (.json only) 
 - index.html
+  - must include `<script type="module" src="/src/main.tsx"></script>`
 - vibefi.json (vapp properties, including addresses + capabilities)
 
 ### Developing

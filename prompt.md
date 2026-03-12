@@ -2,11 +2,13 @@ Given you have a package.json with react@19.2.4, react-dom@19.2.4, typescript@5.
 
 Deliver a bundle containing: 
 - src/ (ts, tsx, and css only) 
+  - `src/main.tsx` (required constrained entrypoint file)
 - assets/ (webp only) 
 - abis/ (json only) 
 - vibefi.json (including addresses and capabilities if IPFS access is needed)
 - package.json (containing only the libraries mentioned)
 - index.html
+  - must include `<script type="module" src="/src/main.tsx"></script>`
 - tsconfig.json
 
 Security rules:
